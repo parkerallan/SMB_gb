@@ -1,2 +1,21 @@
-d:\gbdk\bin\lcc -Wa-l -Wl-m -Wl-j -DUSE_SFR_FOR_REG -o main.gb main.c Mario.c Metasprites.c WorldTiles.c SmallMap.c TitleMap.c
-d:\gbdk\tools\visualboyadvance-m.exe D:\smbgb\main.gb
+@echo off
+rem Build the ROM into build\main.gb (run from anywhere). "make.bat run" also starts mGBA.
+setlocal enabledelayedexpansion
+set GBDK=D:\Emulation\gbdk
+set EMULATOR=D:\Emulation\GBA\mGBA\mGBA.exe
+cd /d "%~dp0"
+if not exist build mkdir build
+
+rem Every .c file in src and assets is part of the ROM
+set SRC=
+for %%f in (src\*.c assets\sprites\*.c assets\tiles\*.c assets\maps\*.c) do set SRC=!SRC! %%f
+
+"%GBDK%\bin\lcc" -Wa-l -Wl-m -Wl-j -DUSE_SFR_FOR_REG ^
+  -Isrc -Iassets\sprites -Iassets\tiles -Iassets\maps ^
+  -o build\main.gb %SRC%
+if errorlevel 1 exit /b 1
+
+rem lcc leaves intermediate files next to the project; keep them out of the way
+del /q *.lst *.o *.ihx *.cdb *.adb *.asm *.sym 2>nul
+
+if /i "%1"=="run" start "" "%EMULATOR%" "%~dp0build\main.gb"

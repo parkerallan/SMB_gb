@@ -1,0 +1,8 @@
+build/
+*.lst
+*.o
+*.ihx
+*.cdb
+*.adb
+*.asm
+*.sym

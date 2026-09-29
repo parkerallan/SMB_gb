@@ -6,7 +6,7 @@
     {
       "label": "Make GB Rom",
       "type": "shell",
-      "command": "D:\\smbgb\\make.bat",
+      "command": "${workspaceFolder}\\make.bat",
       "problemMatcher": []
     }
   ]

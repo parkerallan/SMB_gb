@@ -5,8 +5,8 @@
 
 struct GameCharacter
 {
-    uint16_t x;      // X position
-    uint16_t y;      // Y position
+    int16_t x;       // X position (world pixels)
+    int16_t y;       // Y position (world pixels)
     uint8_t width;  // Width of the character
     uint8_t height; // Height of the character
 };

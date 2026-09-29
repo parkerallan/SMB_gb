@@ -1,24 +1,27 @@
-GBDK_PATH = d:/gbdk
+GBDK_PATH = D:/Emulation/gbdk
+EMULATOR = D:/Emulation/GBA/mGBA/mGBA.exe
 
-# Flags and path to compiler
 CC = $(GBDK_PATH)/bin/lcc
 CFLAGS = -Wa-l -Wl-m -Wl-j -DUSE_SFR_FOR_REG
+INCLUDES = -Isrc -Iassets/sprites -Iassets/tiles -Iassets/maps
 
-SRC = main.c Mario.c
-OBJ = $(SRC:.c=.o)
+SRC = $(wildcard src/*.c assets/*/*.c)
+HEADERS = $(wildcard src/*.h assets/*/*.h)
 
-OUTPUT = main.gb
+OUTPUT = build/main.gb
 
 all: $(OUTPUT)
 
-# Compiling and Linking
-$(OUTPUT): $(OBJ)
-	$(CC) $(CFLAGS) -o main.gb main.c Mario.c Metasprites.c WorldTiles.c SmallMap.c TitleMap.c
+$(OUTPUT): $(SRC) $(HEADERS)
+	mkdir -p build
+	$(CC) $(CFLAGS) $(INCLUDES) -o $(OUTPUT) $(SRC)
+	rm -f *.lst *.o *.ihx *.cdb *.adb *.asm *.sym
 
-# Clean target
+run: $(OUTPUT)
+	"$(EMULATOR)" $(OUTPUT) &
+
 clean:
-	rm -f $(OBJ) $(OUTPUT)
-	rm -f *.lst *.map *.sym *.ihx *.lnk *.asm *.noi
+	rm -rf build
+	rm -f *.lst *.o *.ihx *.cdb *.adb *.asm *.sym
 
-# Phony targets
-.PHONY: all clean
+.PHONY: all run clean
