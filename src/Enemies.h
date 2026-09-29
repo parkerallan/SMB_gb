@@ -20,4 +20,8 @@ void enemiesDraw(void) BANKED;
 // Mario bumped the block at block (bx, by) from below: knock out whatever stands on it
 void enemiesBumpBlock(int16_t bx, int16_t by) BANKED;
 
+// A fireball at (x, y) (8x8, its top-left): knocks out the first enemy it
+// touches; returns 1 if it hit one
+uint8_t enemiesFireballHit(int16_t x, int16_t y) BANKED;
+
 #endif

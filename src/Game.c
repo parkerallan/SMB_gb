@@ -10,6 +10,7 @@
 #include "Powerup.h"
 #include "Enemies.h"
 #include "Popup.h"
+#include "Fireball.h"
 #include "Sprites.h"
 #include "Util.h"
 
@@ -42,6 +43,7 @@ void gameInit(void) {
     powerupInit();
     enemiesInit();
     popupsInit();
+    fireballsInit();
     flagpoleInit();
 }
 
@@ -59,6 +61,7 @@ static void drawSprites(void) {
     playerDraw();
     enemiesDraw();
     powerupDraw();
+    fireballsDraw();
     blocksDraw();
     popupsDraw();
     flagpoleDraw();
@@ -73,6 +76,7 @@ static void startLevel(void) {
     blocksReset(); // the level refills its blocks; coins and score carry over
     powerupReset();
     popupsReset();
+    fireballsReset();
     levelLoad(cameraX);
     enemiesReset();
     flagpoleReset();
@@ -150,6 +154,7 @@ void gameUpdate(void) {
         enemiesUpdate();
         blocksUpdate();
         powerupUpdate();
+        fireballsUpdate();
         popupsUpdate();
     }
     drawSprites();

@@ -10,6 +10,8 @@
 // scenery tiles the level loads from 0 up.
 #define FONT_FIRST_TILE ((uint8_t)(256 - FontTilesCount))
 #define FONT_BLANK_TILE FONT_FIRST_TILE
+// Digits follow the blank (FONT_CHARS starts " 0123456789")
+#define FONT_DIGIT_TILE(d) ((uint8_t)(FONT_FIRST_TILE + 1 + (d)))
 
 // Copy the font into background tile memory
 void fontLoad(void);

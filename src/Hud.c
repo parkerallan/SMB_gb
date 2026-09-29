@@ -26,12 +26,19 @@ static void hudText(uint8_t x, uint8_t y, const char *text) {
     }
 }
 
-// Write value as exactly `digits` digits, zero padded
+static const uint16_t placeValues[] = {10000, 1000, 100, 10, 1};
+
+// Write value as exactly `digits` digits (up to 6), zero padded. Each digit
+// is found by subtracting its place value: the Game Boy has no divide
+// instruction, and dividing by 10 for every digit made score changes drop a frame.
 static void hudNumber(uint8_t x, uint8_t y, uint16_t value, uint8_t digits) {
-    uint8_t *dst = hudMap + y * HUD_COLS + x + digits;
-    while (digits--) {
-        *--dst = fontTile('0' + (value % 10));
-        value /= 10;
+    uint8_t *dst = hudMap + y * HUD_COLS + x;
+    const uint16_t *place;
+    uint8_t d;
+    for (; digits > 5; digits--) *dst++ = FONT_DIGIT_TILE(0); // a uint16_t has 5 digits at most
+    for (place = placeValues + 5 - digits; digits; digits--, place++) {
+        for (d = 0; value >= *place; d++) value -= *place;
+        *dst++ = FONT_DIGIT_TILE(d > 9 ? 9 : d); // too big for its digits: show 9s
     }
 }
 
@@ -57,6 +64,9 @@ void hudInit(void) {
     hudText(HUD_NAME_X, 0, "MARIO");
     hudText(HUD_WORLD_X, 0, "WORLD");
     hudText(HUD_TIME_X, 0, "TIME");
+    hudText(HUD_LIVES_X, 0, "x");
+    hudText(HUD_COINS_X, 1, "@x");
+    hudText(HUD_LEVEL_X + 1, 1, "-");
     move_win(7, 0);
 
     CRITICAL {
@@ -70,16 +80,13 @@ void hudInit(void) {
 
 static void hudScoreAndCoins(uint16_t score, uint8_t coins) {
     hudNumber(HUD_SCORE_X, 1, score, 6);
-    hudText(HUD_COINS_X, 1, "@x");
     hudNumber(HUD_COINS_X + 2, 1, coins, 2);
 }
 
 void hudUpdate(uint16_t score, uint8_t coins, int8_t lives, int8_t world, int8_t level, uint16_t time) {
-    hudText(HUD_LIVES_X, 0, "x");
     hudNumber(HUD_LIVES_X + 1, 0, lives, 1);
     hudScoreAndCoins(score, coins);
     hudNumber(HUD_LEVEL_X, 1, world, 1);
-    hudText(HUD_LEVEL_X + 1, 1, "-");
     hudNumber(HUD_LEVEL_X + 2, 1, level, 1);
     hudNumber(HUD_CLOCK_X, 1, time, 3);
     set_win_tiles(0, 0, HUD_COLS, HUD_ROWS, hudMap);

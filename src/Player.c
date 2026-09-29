@@ -6,6 +6,7 @@
 #include "Level.h"
 #include "Camera.h"
 #include "Blocks.h"
+#include "Fireball.h"
 #include "MarioTiles.h"
 #include "BigMarioTiles.h"
 #include "Metasprites.h"
@@ -28,6 +29,25 @@
 #define DEATH_FREEZE_FRAMES 30
 #define DEATH_JUMP -64
 #define DEATH_FALL_BELOW 24 // pixels below the screen before the death is over
+// Fire Mario: throws a fireball per press of B, showing the throw frame briefly
+#define THROW_FRAMES 8
+#define FIREBALL_HAND_X 12 // where the fireball leaves his hand, facing right
+#define FIREBALL_HAND_Y 8
+// Star: invincible for 10 seconds, flashing colors, slower for the last 2
+#define STAR_FRAMES 600
+#define STAR_SLOW_FRAMES 120
+
+// Mario's colors. Normal Mario uses sprite palette 0 like everything else;
+// fire and star Mario use palette 1, which only Mario uses. In MarioTiles the
+// shades stand for SMB's red (2), skin (1) and brown (3); fire Mario's red
+// parts turn white and his brown parts red, like SMB.
+#define PALETTE_FIRE DMG_PALETTE(DMG_WHITE, DMG_LITE_GRAY, DMG_WHITE, DMG_DARK_GRAY)
+static const uint8_t starPalettes[] = {
+    DMG_PALETTE(DMG_WHITE, DMG_LITE_GRAY, DMG_DARK_GRAY, DMG_BLACK), // normal
+    PALETTE_FIRE,
+    DMG_PALETTE(DMG_WHITE, DMG_DARK_GRAY, DMG_BLACK, DMG_WHITE),
+    DMG_PALETTE(DMG_WHITE, DMG_BLACK, DMG_LITE_GRAY, DMG_DARK_GRAY),
+};
 
 // Big Mario's frames in video memory, 8 tiles each (see playerInit)
 #define BIG_STAND  0
@@ -50,6 +70,11 @@ static uint8_t walkTimer, walkFrame;
 static uint8_t big;
 static uint8_t sizeTimer;       // growing or shrinking
 static uint8_t invincibleTimer;
+static uint8_t fire;
+static uint8_t becomingFire;    // sizeTimer is running for the flower, not a size change
+static uint8_t throwTimer;
+static uint8_t lastInput;
+static uint16_t starTimer;
 static uint8_t dying;
 static uint8_t deathTimer;
 
@@ -63,6 +88,7 @@ void playerInit(void) {
     bankedSetSpriteData(SPR_TILE_BIG_MARIO + BIG_STAND, BIGMARIOTILES_SWIM1, BigMarioTiles, BANK(BigMarioTiles));
     bankedSetSpriteData(SPR_TILE_BIG_MARIO + BIG_CROUCH, 8, BigMarioTiles + BIGMARIOTILES_CROUCH * 16,
                         BANK(BigMarioTiles));
+    bankedSetSpriteData(SPR_TILE_BIG_FIRE, 8, BigMarioTiles + BIGMARIOTILES_FIRE * 16, BANK(BigMarioTiles));
 }
 
 void playerReset(void) {
@@ -79,6 +105,11 @@ void playerReset(void) {
     big = 0;
     sizeTimer = 0;
     invincibleTimer = 0;
+    fire = 0;
+    becomingFire = 0;
+    throwTimer = 0;
+    lastInput = 0;
+    starTimer = 0;
     dying = 0;
 }
 
@@ -90,6 +121,25 @@ void playerGrow(void) {
     sizeTimer = CHANGE_SIZE_FRAMES;
 }
 
+void playerFire(void) {
+    if (!big) {
+        playerGrow(); // a flower makes small Mario big, like a mushroom
+        return;
+    }
+    if (fire) return;
+    fire = 1;
+    becomingFire = 1;
+    sizeTimer = CHANGE_SIZE_FRAMES; // the game pauses while he flashes
+}
+
+void playerStar(void) {
+    starTimer = STAR_FRAMES;
+}
+
+uint8_t playerHasStar(void) {
+    return starTimer != 0;
+}
+
 uint8_t playerIsBig(void) {
     return big;
 }
@@ -99,12 +149,13 @@ uint8_t playerIsChangingSize(void) {
 }
 
 void playerHurt(void) {
-    if (invincibleTimer || sizeTimer || dying) return;
+    if (invincibleTimer || starTimer || sizeTimer || dying) return;
     if (!big) {
         playerDie();
         return;
     }
     big = 0;
+    fire = 0; // fire Mario goes straight back to small, like SMB
     crouching = 0;
     mario.y += BIG_HEIGHT - SMALL_HEIGHT; // shrink toward the feet
     mario.height = SMALL_HEIGHT;
@@ -123,6 +174,10 @@ void playerDie(void) {
         mario.y += BIG_HEIGHT - SMALL_HEIGHT;
         mario.height = SMALL_HEIGHT;
     }
+    fire = 0;
+    starTimer = 0;
+    sizeTimer = 0;
+    becomingFire = 0;
     dying = 1;
     deathTimer = 0;
     velocityY = 0;
@@ -205,10 +260,20 @@ void playerUpdate(uint8_t input) {
         return;
     }
     if (sizeTimer) {
-        sizeTimer--;
+        if (!--sizeTimer) becomingFire = 0;
         return;
     }
     if (invincibleTimer) invincibleTimer--;
+    if (starTimer) starTimer--;
+    if (throwTimer) throwTimer--;
+
+    // Fire Mario throws a fireball each time B is pressed
+    if (fire && (input & J_B) && !(lastInput & J_B) && !crouching &&
+        fireballThrow(facingLeft ? mario.x + (16 - FIREBALL_HAND_X - 8) : mario.x + FIREBALL_HAND_X,
+                      mario.y + FIREBALL_HAND_Y, facingLeft)) {
+        throwTimer = THROW_FRAMES;
+    }
+    lastInput = input;
 
     if ((input & J_A) && onGround) {
         velocityY = JUMP_STRENGTH;
@@ -239,26 +304,44 @@ void playerUpdate(uint8_t input) {
     }
 }
 
+static uint8_t palette; // S_PALETTE while fire or star Mario, else 0
+
 // 16x16 frames (mario_metasprite's layout) at `firstTile`
 static void drawSmall(const metasprite_t *frame, uint8_t firstTile, uint8_t sx, uint8_t sy) {
     uint8_t used;
-    if (facingLeft) used = move_metasprite_flipx(frame, firstTile, 0, spritesNext(), sx + mario.width, sy);
-    else            used = move_metasprite_ex(frame, firstTile, 0, spritesNext(), sx, sy);
+    if (facingLeft) used = move_metasprite_flipx(frame, firstTile, palette, spritesNext(), sx + mario.width, sy);
+    else            used = move_metasprite_ex(frame, firstTile, palette, spritesNext(), sx, sy);
     spritesAdvance(used);
 }
 
-static void drawBig(uint8_t bigFrame, uint8_t sx, uint8_t sy) {
-    uint8_t tile = SPR_TILE_BIG_MARIO + bigFrame;
+// 16x32 frames (big_mario_metasprite's layout) starting at sprite tile `tile`
+static void drawBig(uint8_t tile, uint8_t sx, uint8_t sy) {
     uint8_t used;
-    if (facingLeft) used = move_metasprite_flipx(big_mario_metasprite, tile, 0, spritesNext(), sx + mario.width, sy);
-    else            used = move_metasprite_ex(big_mario_metasprite, tile, 0, spritesNext(), sx, sy);
+    if (facingLeft) used = move_metasprite_flipx(big_mario_metasprite, tile, palette, spritesNext(), sx + mario.width, sy);
+    else            used = move_metasprite_ex(big_mario_metasprite, tile, palette, spritesNext(), sx, sy);
     spritesAdvance(used);
+}
+
+// Fire colors, or the star's flashing colors
+static void choosePalette(void) {
+    palette = 0;
+    if (starTimer) {
+        OBP1_REG = starPalettes[(starTimer >> (starTimer < STAR_SLOW_FRAMES ? 3 : 1)) & 3];
+        palette = S_PALETTE;
+    } else if (fire) {
+        // flashes while turning into fire Mario
+        if (!becomingFire || ((sizeTimer >> 2) & 1)) {
+            OBP1_REG = PALETTE_FIRE;
+            palette = S_PALETTE;
+        }
+    }
 }
 
 void playerDraw(void) {
     uint8_t sx = mario.x - cameraX + SPRITE_OFFSET_X;
     uint8_t sy = mario.y - cameraY + SPRITE_OFFSET_Y;
 
+    choosePalette();
     if (dying) {
         if (mario.y < cameraY + 144) drawSmall(mario_metasprite, SPR_TILE_MARIO_DEAD, sx, sy);
         return;
@@ -266,8 +349,8 @@ void playerDraw(void) {
     if (sizeTimer) {
         // Flash between small (standing at the same feet position) and big.
         // `big` already says which size he's becoming.
-        uint8_t showBig = ((sizeTimer / CHANGE_SIZE_FLASH_FRAMES) & 1) ? !big : big;
-        if (showBig) drawBig(BIG_STAND, sx, big ? sy : sy - (BIG_HEIGHT - SMALL_HEIGHT));
+        uint8_t showBig = becomingFire || (((sizeTimer / CHANGE_SIZE_FLASH_FRAMES) & 1) ? !big : big);
+        if (showBig) drawBig(SPR_TILE_BIG_MARIO + BIG_STAND, sx, big ? sy : sy - (BIG_HEIGHT - SMALL_HEIGHT));
         else         drawSmall(mario_metasprite, SPR_TILE_MARIO, sx, big ? sy + (BIG_HEIGHT - SMALL_HEIGHT) : sy);
         return;
     }
@@ -275,10 +358,11 @@ void playerDraw(void) {
     if (invincibleTimer & 2) return;
 
     if (big) {
-        if (!onGround)      drawBig(BIG_JUMP, sx, sy);
-        else if (crouching) drawBig(BIG_CROUCH, sx, sy);
-        else if (moving)    drawBig(bigWalkFrames[walkFrame], sx, sy);
-        else                drawBig(BIG_STAND, sx, sy);
+        if (throwTimer)     drawBig(SPR_TILE_BIG_FIRE, sx, sy);
+        else if (!onGround) drawBig(SPR_TILE_BIG_MARIO + BIG_JUMP, sx, sy);
+        else if (crouching) drawBig(SPR_TILE_BIG_MARIO + BIG_CROUCH, sx, sy);
+        else if (moving)    drawBig(SPR_TILE_BIG_MARIO + bigWalkFrames[walkFrame], sx, sy);
+        else                drawBig(SPR_TILE_BIG_MARIO + BIG_STAND, sx, sy);
     } else {
         if (!onGround)      drawSmall(mario_jump_metasprite, SPR_TILE_MARIO, sx, sy);
         else if (moving)    drawSmall(walkFrames[walkFrame], SPR_TILE_MARIO, sx, sy);

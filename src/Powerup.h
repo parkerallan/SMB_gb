@@ -4,8 +4,12 @@
 #include <stdint.h>
 #include <gb/gb.h>
 
-// The mushroom from a power-up ? block: it rises out of the block, slides
-// along, and makes small Mario big when he touches it
+// The item from a power-up block: it rises out of the block, then the mushroom
+// slides along, the flower stays put and the star hops along. Touching it
+// makes small Mario big, big Mario fire Mario, or Mario invincible.
+#define POWERUP_MUSHROOM 0
+#define POWERUP_FLOWER   1
+#define POWERUP_STAR     2
 
 // Load its sprite tiles
 void powerupInit(void) BANKED;
@@ -13,8 +17,8 @@ void powerupInit(void) BANKED;
 // Remove it (level restart)
 void powerupReset(void) BANKED;
 
-// A power-up block at tile (tx, ty) (its top-left) was hit
-void powerupSpawn(int16_t tx, int16_t ty) BANKED;
+// A block at tile (tx, ty) (its top-left) was hit and gives a POWERUP_* item
+void powerupSpawn(int16_t tx, int16_t ty, uint8_t what) BANKED;
 
 // Move and collect for one frame, and draw
 void powerupUpdate(void) BANKED;

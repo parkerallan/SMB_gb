@@ -29,6 +29,8 @@
 #define WALK_ANIM_SHIFT 3    // walk animation changes every 8 frames
 #define STOMP_DEPTH 8        // stomp if Mario's feet are no deeper than this into the enemy
 #define BUMP_POINTS 100
+#define FIRE_POINTS_GOOMBA 100 // fireball kills, like SMB
+#define FIRE_POINTS_KOOPA 200
 #define SHELL_CHAIN_START 3  // shell kills start at 500
 
 // Sprite tiles, loaded from EnemyTiles in this order
@@ -78,6 +80,7 @@ static uint8_t spawnKind[Level1_1EnemyCount];
 static uint8_t spawned[Level1_1EnemyCount];
 
 static uint8_t stompChain; // stomps since Mario last touched the ground
+static uint8_t starChain;  // enemies knocked out by the current star
 static uint8_t windowStart; // first spawn entry that isn't left of the spawn window (the list is sorted by x)
 static int16_t despawnLeft, despawnRight;
 
@@ -248,6 +251,13 @@ static void touchMario(Enemy *e) {
     // Feet coming down on the top part of the enemy is a stomp; anything else hurts
     uint8_t stomp = playerIsFalling() && mario.y + mario.height <= e->body.y + STOMP_DEPTH;
 
+    if (playerHasStar()) {
+        // star power knocks out anything Mario touches
+        knockOut(e);
+        award(&starChain, e->body.x, e->body.y);
+        return;
+    }
+
     switch (e->state) {
     case WALKING:
         if (stomp) {
@@ -302,7 +312,7 @@ static void touchEachOther(Enemy *a, Enemy *b) {
 }
 
 void enemiesUpdate(void) BANKED {
-    uint8_t i, j, state, marioColumn, marioX, marioY, marioH;
+    uint8_t i, j, state, everyFrame, marioColumn, marioX, marioY, marioH;
     Enemy *e;
     int16_t spawnRight = cameraX + SCREEN_WIDTH + SPAWN_MARGIN;
     int16_t spawnLeft = cameraX - SPAWN_MARGIN - 16;
@@ -319,6 +329,7 @@ void enemiesUpdate(void) BANKED {
     }
 
     if (playerOnGround()) stompChain = 0;
+    if (!playerHasStar()) starChain = 0;
     marioColumn = (uint8_t)(mario.x >> 4);
     marioX = (uint8_t)mario.x;
     marioY = (uint8_t)mario.y;
@@ -328,7 +339,8 @@ void enemiesUpdate(void) BANKED {
     // The Game Boy can't move six enemies every frame and keep up, so each one
     // moves every other frame by two frames' worth (half on even frames, half on
     // odd). Walking enemies only move a pixel every other frame anyway, so this
-    // looks the same; a kicked shell is fast and still moves every frame.
+    // looks the same; a kicked shell is fast and still moves every frame, and
+    // so does a knocked-out enemy falling off the screen.
     // Collisions with Mario are still checked every frame.
     frameParity ^= 1;
     e = enemies;
@@ -338,8 +350,9 @@ void enemiesUpdate(void) BANKED {
             collides[i] = 0;
             continue;
         }
-        if (state == SHELL_MOVING || (i & 1) == frameParity) {
-            move(e, state == SHELL_MOVING ? 1 : 2);
+        everyFrame = (state == SHELL_MOVING || state == KNOCKED);
+        if (everyFrame || (i & 1) == frameParity) {
+            move(e, everyFrame ? 1 : 2);
             state = e->state;
             remember(i, e);
         }
@@ -381,6 +394,26 @@ void enemiesBumpBlock(int16_t bx, int16_t by) BANKED {
             popupShow(e->body.x, e->body.y - 8, BUMP_POINTS);
         }
     }
+}
+
+uint8_t enemiesFireballHit(int16_t x, int16_t y) BANKED {
+    // an 8x8 fireball against 16x16 enemies, with the same 8-bit checks as
+    // enemiesUpdate (NEAR first, then the low bytes)
+    uint8_t i, col = (uint8_t)(x >> 4), fx = (uint8_t)x, fy = (uint8_t)y;
+    uint16_t points;
+    Enemy *e = enemies;
+    for (i = 0; i < MAX_ENEMIES; i++, e++) {
+        if (!CAN_COLLIDE(e->state) || !NEAR(column[i], col)) continue;
+        if ((uint8_t)(fx - lowX[i] + 7) < 23 && (uint8_t)(fy - lowY[i] + 7) < 23) {
+            knockOut(e);
+            collides[i] = 0;
+            points = (e->kind == ENEMY_GOOMBA) ? FIRE_POINTS_GOOMBA : FIRE_POINTS_KOOPA;
+            gameAddScore(points);
+            popupShow(e->body.x, e->body.y - 8, points);
+            return 1;
+        }
+    }
+    return 0;
 }
 
 void enemiesDraw(void) BANKED {

@@ -7,7 +7,8 @@
  Converted from the original hand-made 8x8-tile map (GBMB): the clouds, castle
  and flagpole were replaced with Super Mario Bros.' own blocks, and the flag is
  drawn as a sprite. The three ? blocks that hold a mushroom in SMB's 1-1 are
- QUESTION_POWERUP: block (21, 9), (78, 9) and (109, 5).
+ QUESTION_POWERUP: block (21, 9), (78, 9) and (109, 5), and the brick holding
+ the star is BRICK_LINE_STAR: block (101, 9).
 */
 
 #pragma bank 1
@@ -123,7 +124,7 @@ const unsigned char Level1_1[] =
     0,  0,  0,  0,  0,  0, 16, 17,  0,  0,  0,  0,  0,  0,  0,  0,  0, 16, 17,  0,
     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 56, 96, 56,
     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 56,  0,  0,  0,  0,  0,
-   56, 56,  0,  0,  0,  0, 95,  0,  0, 95,  0,  0, 95,  0,  0,  0,  0,  0, 56,  0,
+   56, 62,  0,  0,  0,  0, 95,  0,  0, 95,  0,  0, 95,  0,  0,  0,  0,  0, 56,  0,
     0,  0,  0,  0,  0,  0,  0,  0,  0, 56, 56,  0,  0,  0,  0,  0,  0, 72,  0,  0,
    72,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 72, 72,  0,  0, 72,  0,  0,  0,  0,
     0,  0,  0,  0,  0,  0,  0,  0, 56, 56, 95, 56,  0,  0,  0,  0,  0,  0,  0,  0,

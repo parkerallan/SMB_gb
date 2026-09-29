@@ -63,6 +63,11 @@ static uint8_t isBrick(uint8_t block) {
            (block >= SCENERY_BRICK_POWERUP && block <= SCENERY_BRICK_1UP);
 }
 
+static uint8_t isItemBrick(uint8_t block) {
+    return block == SCENERY_BRICK_LINE_STAR || block == SCENERY_BRICK_STAR ||
+           block == SCENERY_BRICK_LINE_POWERUP || block == SCENERY_BRICK_POWERUP;
+}
+
 // Sprite copy of a block's 4 background tiles, for bouncing it
 static void loadBlockSprite(uint8_t firstSpriteTile, uint8_t block) {
     const uint8_t *tiles = levelBlockTiles(block);
@@ -157,10 +162,19 @@ void blocksHit(int16_t tx, int16_t ty) BANKED {
         levelSetBlock(bx >> 1, by >> 1, SCENERY_USED_BLOCK);
         startBump(bx, by, SCENERY_USED_BLOCK);
         if (block == SCENERY_QUESTION_POWERUP) {
-            powerupSpawn(bx, by);
+            powerupSpawn(bx, by, playerIsBig() ? POWERUP_FLOWER : POWERUP_MUSHROOM);
         } else {
             spawnCoin(bx, by);
             gameCollectCoin();
+        }
+    } else if (isItemBrick(block)) {
+        // bricks holding an item give it once, then are used blocks
+        levelSetBlock(bx >> 1, by >> 1, SCENERY_USED_BLOCK);
+        startBump(bx, by, SCENERY_USED_BLOCK);
+        if (block == SCENERY_BRICK_LINE_STAR || block == SCENERY_BRICK_STAR) {
+            powerupSpawn(bx, by, POWERUP_STAR);
+        } else {
+            powerupSpawn(bx, by, playerIsBig() ? POWERUP_FLOWER : POWERUP_MUSHROOM);
         }
     } else if (block == SCENERY_BRICK_LINE || block == SCENERY_BRICK) {
         if (playerIsBig()) breakBrick(bx, by);

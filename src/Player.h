@@ -26,6 +26,14 @@ uint8_t playerFellOut(void);
 void playerGrow(void);
 uint8_t playerIsBig(void);
 
+// Fire flower: big Mario becomes fire Mario (the game pauses while he flashes)
+// and throws fireballs with B; small Mario just grows
+void playerFire(void);
+
+// Star: invincible for a while, knocking out any enemy he touches
+void playerStar(void);
+uint8_t playerHasStar(void);
+
 // Growing or shrinking: the rest of the game pauses meanwhile
 uint8_t playerIsChangingSize(void);
 
