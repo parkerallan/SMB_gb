@@ -31,6 +31,10 @@ uint8_t gameTimeBonus(void);
 // Mario got a coin: +200 points, and every 100 coins is an extra life
 void gameCollectCoin(void);
 
+// Go to another area (through a pipe), with Mario at (x, y): loads it with the
+// screen off, like startLevel, keeping everything about Mario and the clock
+void gameChangeArea(uint8_t area, int16_t x, int16_t y);
+
 // Run one frame of gameplay
 void gameUpdate(void);
 

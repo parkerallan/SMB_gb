@@ -60,12 +60,23 @@ static void hudClearRow(uint8_t y) {
 
 // The window covers the whole screen below WY, so it is switched off after
 // the HUD's last line and back on at the start of every frame.
+// The HUD always uses the normal palette; the level below it may not (an
+// underground area's sky is black), so the palette switches along with the window.
+#define HUD_PALETTE DMG_PALETTE(DMG_WHITE, DMG_LITE_GRAY, DMG_DARK_GRAY, DMG_BLACK)
+static uint8_t levelPalette = HUD_PALETTE;
+
+void hudSetLevelPalette(uint8_t palette) {
+    levelPalette = palette;
+}
+
 static void hudHideWindow(void) {
     HIDE_WIN;
+    BGP_REG = levelPalette;
 }
 
 static void hudShowWindow(void) {
     SHOW_WIN;
+    BGP_REG = HUD_PALETTE;
 }
 
 void hudInit(void) {

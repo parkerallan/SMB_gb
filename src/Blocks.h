@@ -13,6 +13,10 @@ void blocksInit(void) BANKED;
 // Clear effects (level restart; the level itself refills the blocks)
 void blocksReset(void) BANKED;
 
+// Collect any loose coins Mario is touching (the coin room's); only needed
+// while the area has some left (levelCoins)
+void blocksCollectCoins(void) BANKED;
+
 // Mario's head hit the solid tile at (tx, ty)
 void blocksHit(int16_t tx, int16_t ty) BANKED;
 

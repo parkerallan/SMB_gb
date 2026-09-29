@@ -10,6 +10,9 @@ extern int16_t cameraX, cameraY;
 // Put the camera at the bottom-left of the level
 void cameraReset(void);
 
+// Jump to show the target (arriving in another area), then scroll as usual
+void cameraJumpTo(const struct GameCharacter *target);
+
 // Scroll to keep the target inside the dead zone
 void cameraFollow(const struct GameCharacter *target);
 

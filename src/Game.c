@@ -11,6 +11,7 @@
 #include "Enemies.h"
 #include "Popup.h"
 #include "Fireball.h"
+#include "Pipes.h"
 #include "Sprites.h"
 #include "Util.h"
 
@@ -22,6 +23,10 @@
 #define DEATH_PAUSE_FRAMES 30
 #define COIN_POINTS 200
 #define COINS_PER_LIFE 100
+// Background palettes: normal, and underground (black sky; the bricks' dark
+// outlines blend into it, like SMB's)
+#define PALETTE_OVERWORLD   DMG_PALETTE(DMG_WHITE, DMG_LITE_GRAY, DMG_DARK_GRAY, DMG_BLACK)
+#define PALETTE_UNDERGROUND DMG_PALETTE(DMG_BLACK, DMG_LITE_GRAY, DMG_DARK_GRAY, DMG_BLACK)
 #define TIME_BONUS_POINTS 50 // per unit of time left at the end of a level, like SMB
 
 int8_t lives;
@@ -69,25 +74,45 @@ static void drawSprites(void) {
     spritesEnd();
 }
 
+// Everything that belongs to the area Mario's in: its blocks, items, enemies
+static void resetAreaObjects(void) {
+    blocksReset(); // the area refills its blocks; coins and score carry over
+    powerupReset();
+    popupsReset();
+    fireballsReset();
+    enemiesReset();
+    flagpoleReset();
+    pipesReset();
+    hudSetLevelPalette(levelUnderground ? PALETTE_UNDERGROUND : PALETTE_OVERWORLD);
+}
+
 // Load the level with the screen off so it appears all at once
 static void startLevel(void) {
     DISPLAY_OFF;
     playerReset();
     cameraReset();
-    blocksReset(); // the level refills its blocks; coins and score carry over
-    powerupReset();
-    popupsReset();
-    fireballsReset();
-    levelLoad(cameraX);
-    enemiesReset();
-    flagpoleReset();
+    levelLoad(AREA_1_1, cameraX);
+    resetAreaObjects();
     timeFrames = 0;
     drawSprites();
     SHOW_SPRITES;
     DISPLAY_ON;
 }
 
+void gameChangeArea(uint8_t area, int16_t x, int16_t y) {
+    DISPLAY_OFF;
+    levelLoad(area, 0);
+    mario.x = x;
+    mario.y = y;
+    cameraJumpTo(&mario);
+    cameraApply(); // scroll there and fill in the columns now on screen
+    resetAreaObjects();
+    drawSprites();
+    DISPLAY_ON;
+}
+
 void gameEnterLevel(void) {
+    hudSetLevelPalette(PALETTE_OVERWORLD); // for the world screen
     timeLeft = TIME_LIMIT;
     refreshHud();
     worldScreen(world, level, lives);
@@ -116,6 +141,7 @@ void gameCollectCoin(void) {
 
 static void loseLife(void) {
     waitFrames(DEATH_PAUSE_FRAMES);
+    hudSetLevelPalette(PALETTE_OVERWORLD); // for the screens that follow
     lives--;
     if (lives <= 0) {
         refreshHud();
@@ -155,6 +181,7 @@ static uint8_t tickClock(void) {
 }
 
 void gameUpdate(void) {
+    uint8_t input;
     if (playerIsDying() || playerIsChangingSize()) {
         // Everything else stops while Mario changes size or dies, like SMB
         playerUpdate(0);
@@ -173,8 +200,13 @@ void gameUpdate(void) {
         blocksUpdate();
         fireballsUpdate();
         popupsUpdate();
+    } else if (pipesActive()) {
+        // Going through a pipe: everything else waits
+        pipesUpdate();
+        cameraFollow(&mario);
     } else {
-        playerUpdate(joypad());
+        input = joypad();
+        playerUpdate(input);
         if (playerFellOut()) {
             playerDie(); // takes his power-ups away, like any death
             loseLife();
@@ -182,6 +214,8 @@ void gameUpdate(void) {
         }
         if (tickClock()) playerDie(); // out of time
         flagpoleCheck(); // grabbed the flagpole?
+        if (input & (J_DOWN | J_RIGHT)) pipesCheck(input); // going down (or into) a pipe?
+        if (levelCoins) blocksCollectCoins();
 
         cameraFollow(&mario);
         enemiesUpdate();

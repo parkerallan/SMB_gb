@@ -26,6 +26,10 @@ static struct {
     int16_t x, y;
 } popups[MAX_POPUPS];
 
+// Is anything showing? Most frames nothing is, and then update and draw
+// return straight away (looping over the empty slots cost several scanlines)
+static uint8_t busy;
+
 void popupsInit(void) BANKED {
     bankedSetSpriteData(SPR_TILE_SCORE, 9, ItemTiles + ITEMTILES_SCORE * 16, BANK(ItemTiles));
 }
@@ -33,6 +37,7 @@ void popupsInit(void) BANKED {
 void popupsReset(void) BANKED {
     uint8_t i;
     for (i = 0; i < MAX_POPUPS; i++) popups[i].active = 0;
+    busy = 0;
 }
 
 void popupShow(int16_t x, int16_t y, uint16_t points) BANKED {
@@ -63,6 +68,7 @@ void popupShow(int16_t x, int16_t y, uint16_t points) BANKED {
     }
     if (i == MAX_POPUPS) i = 0; // reuse the oldest
     popups[i].active = 1;
+    busy = 1;
     popups[i].timer = 0;
     popups[i].x = x;
     popups[i].y = y;
@@ -72,15 +78,19 @@ void popupShow(int16_t x, int16_t y, uint16_t points) BANKED {
 
 void popupsUpdate(void) BANKED {
     uint8_t i;
+    if (!busy) return;
+    busy = 0;
     for (i = 0; i < MAX_POPUPS; i++) {
         if (!popups[i].active) continue;
         if (++popups[i].timer > POPUP_FRAMES) popups[i].active = 0;
         else if (popups[i].timer & 1) popups[i].y--;
+        busy |= popups[i].active;
     }
 }
 
 void popupsDraw(void) BANKED {
     uint8_t i;
+    if (!busy) return;
     for (i = 0; i < MAX_POPUPS; i++) {
         if (!popups[i].active) continue;
         spriteDraw(popups[i].left, 0, popups[i].x, popups[i].y);

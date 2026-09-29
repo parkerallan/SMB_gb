@@ -78,6 +78,7 @@ static int16_t spawnX[Level1_1EnemyCount];
 static uint8_t spawnY[Level1_1EnemyCount];
 static uint8_t spawnKind[Level1_1EnemyCount];
 static uint8_t spawned[Level1_1EnemyCount];
+static uint8_t spawnCount; // entries in the current area's list (the coin room has none)
 
 static uint8_t stompChain; // stomps since Mario last touched the ground
 static uint8_t starChain;  // enemies knocked out by the current star
@@ -103,8 +104,9 @@ void enemiesReset(void) BANKED {
     uint8_t i;
     Enemy *e;
 
+    spawnCount = (levelArea == AREA_1_1) ? Level1_1EnemyCount : 0;
     bankedMemcpy(list, Level1_1Enemies, sizeof(list), BANK(Level1_1Enemies));
-    for (i = 0; i < Level1_1EnemyCount; i++, src += 4) {
+    for (i = 0; i < spawnCount; i++, src += 4) {
         spawnX[i] = src[0] | (src[1] << 8);
         spawnY[i] = src[2];
         spawnKind[i] = src[3];
@@ -322,9 +324,9 @@ void enemiesUpdate(void) BANKED {
 
     // The spawn list is sorted by x: slide the window's start with the camera,
     // then only look at the few entries inside it
-    while (windowStart < Level1_1EnemyCount && spawnX[windowStart] <= spawnLeft) windowStart++;
+    while (windowStart < spawnCount && spawnX[windowStart] <= spawnLeft) windowStart++;
     while (windowStart > 0 && spawnX[windowStart - 1] > spawnLeft) windowStart--;
-    for (i = windowStart; i < Level1_1EnemyCount && spawnX[i] < spawnRight; i++) {
+    for (i = windowStart; i < spawnCount && spawnX[i] < spawnRight; i++) {
         if (!spawned[i]) spawn(i);
     }
 

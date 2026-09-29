@@ -51,8 +51,11 @@ uint8_t playerDeathFinished(void);
 #define POSE_NORMAL 0
 #define POSE_POLE   1
 #define POSE_HIDDEN 2
+#define POSE_PIPE   3   // going through a pipe: drawn behind it, moved by the pipe code
 void playerSetPose(uint8_t pose);
 void playerFaceLeft(uint8_t left);
+// Step the walking animation (walking into a pipe)
+void playerAnimateWalk(void);
 
 // Stomping an enemy: little hop off it
 void playerBounce(void);

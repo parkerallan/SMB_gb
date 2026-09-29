@@ -354,6 +354,7 @@ def main():
     misc_bg.write("assets/tiles")
 
     write_enemy_list(chr_.prg)
+    write_bonus_room(chr_.prg)
 
     render_references()
 
@@ -433,6 +434,203 @@ def write_enemy_list(prg):
     open(out + ".c", "w", newline="\n").write("\n".join(c))
     print("wrote assets/maps/Level1_1Enemies.c/.h (%d enemies)" % len(enemies))
 
+
+# ---- Level (area) data. SMB keeps each area as a 2-byte header and a list of
+# 2-byte objects: [column << 4 | row], [page flag (bit 7), kind (bits 6-4),
+# length (bits 3-0)]; $FD ends it. Rows 0-11 hold blocks, rows 12-15 special
+# objects. The terrain (floor and ceiling pattern) is drawn first, objects over it.
+# The decoder handles the objects the areas we use need; anything else stops it.
+AREA_DATA_H_OFFSETS, AREA_DATA_LOW, AREA_DATA_HIGH = 0x9D28, 0x9D2C, 0x9D4E
+ENEMY_ADDR_H_OFFSETS, ENEMY_DATA_LOW, ENEMY_DATA_HIGH = 0x9CE0, 0x9CE4, 0x9D06
+AREA_1_1 = 0x25
+# per area type: water, ground, underground, castle
+TERRAIN_METATILES = [0x69, 0x54, 0x52, 0x62]
+BRICK_METATILES = [0x22, 0x51, 0x52, 0x52]
+SOLID_METATILES = [0x69, 0x61, 0x61, 0x62]
+COIN_METATILES = [0xC3, 0xC2, 0xC2, 0xC2]
+UNDERGROUND_FLOOR = 0x54   # underground terrain turns to ground from row 11 down
+# TerrainRenderBits: rows 0-7 in the first byte, rows 8-12 in the second (bit 0 = top)
+TERRAIN_BITS = [(0x00, 0x00), (0x00, 0x18), (0x01, 0x18), (0x07, 0x18), (0x0F, 0x18), (0xFF, 0x18),
+                (0x01, 0x1F), (0x07, 0x1F), (0x0F, 0x1F), (0x81, 0x1F), (0x01, 0x00), (0x8F, 0x1F),
+                (0xF1, 0x1F), (0xF9, 0x18), (0xF1, 0x18), (0xFF, 0x1F)]
+# Small objects (kind 0 in rows 0-11) by length: ? blocks, hidden blocks, bricks with items, used block
+SMALL_OBJECTS = {0: 0xC1, 1: 0xC0, 2: 0x5F, 3: 0x60, 4: 0x55, 5: 0x56, 6: 0x57, 7: 0x58, 8: 0x59, 0xA: 0xC4}
+PLAYER_START_Y = [0x00, 0x20, 0xB0, 0x50, 0x00, 0x00, 0xB0, 0xB0]  # by the header's start position
+PLAYER_START_X = 0x28
+AREA_ROWS = 13        # SMB's rows 0-12 are our map rows 2-14 (rows 0-1 are under its status bar)
+MAP_ROW_OFFSET = 2
+
+
+def area_type(ptr):
+    return (ptr >> 5) & 3
+
+
+def area_address(prg, ptr, h_offsets, low, high):
+    k = prg[h_offsets - 0x8000 + area_type(ptr)] + (ptr & 0x1F)
+    return prg[low - 0x8000 + k] | (prg[high - 0x8000 + k] << 8)
+
+
+def read_warps(prg, ptr):
+    """The pipe warps in an area's enemy list: (page it applies from, destination area, world, page there)"""
+    i = area_address(prg, ptr, ENEMY_ADDR_H_OFFSETS, ENEMY_DATA_LOW, ENEMY_DATA_HIGH) - 0x8000
+    page, warps = 0, []
+    while prg[i] != 0xFF:
+        row = prg[i] & 0x0F
+        if row == 0x0E:
+            if prg[i + 1] & 0x80:
+                page += 1
+            warps.append((page, prg[i + 1] & 0x7F, prg[i + 2] >> 5, prg[i + 2] & 0x1F))
+            i += 3
+            continue
+        if row == 0x0F:
+            page = prg[i + 1] & 0x3F
+        elif prg[i + 1] & 0x80:
+            page += 1
+        i += 2
+    return warps
+
+
+def decode_area(prg, ptr, width, strict=True):
+    """(header, grid[column][row] of SMB metatile numbers, pipes) for the area's first `width` columns"""
+    kind_of_area = area_type(ptr)
+    i = area_address(prg, ptr, AREA_DATA_H_OFFSETS, AREA_DATA_LOW, AREA_DATA_HIGH) - 0x8000
+    header = (prg[i], prg[i + 1])
+    i += 2
+    objects, page = [], 0
+    while prg[i] != 0xFD:
+        b1, b2 = prg[i], prg[i + 1]
+        i += 2
+        if b2 & 0x80:
+            page += 1
+        if b1 & 0x0F == 0x0D and not (b2 & 0x40):   # page control: jump to a page
+            page = b2 & 0x1F
+            continue
+        objects.append((page * 16 + (b1 >> 4), b1, b2))
+    grid = [[0] * AREA_ROWS for _ in range(width)]
+
+    terrain = header[1] & 0x0F
+    changes = {c: b2 & 0x0F for c, b1, b2 in objects if b1 & 0x0F == 0x0E and not (b2 & 0x40)}
+    for c in range(width):
+        terrain = changes.get(c, terrain)
+        bits = TERRAIN_BITS[terrain][0] | (TERRAIN_BITS[terrain][1] << 8)
+        metatile = TERRAIN_METATILES[kind_of_area]
+        for r in range(AREA_ROWS):
+            if kind_of_area == 2 and r == 11:
+                metatile = UNDERGROUND_FLOOR
+            if bits & (1 << r):
+                grid[c][r] = metatile
+
+    def put(c, r, m):
+        if 0 <= c < width and 0 <= r < AREA_ROWS:
+            grid[c][r] = m
+
+    pipes = []   # (column, top row, can be entered)
+    for c, b1, b2 in objects:
+        if c >= width:
+            continue
+        row, length, kind = b1 & 0x0F, b2 & 0x0F, (b2 >> 4) & 7
+        if row <= 11 and kind == 0 and length in SMALL_OBJECTS:
+            put(c, row, SMALL_OBJECTS[length])
+        elif row <= 11 and kind in (2, 3, 4):          # rows of bricks, solid blocks, coins
+            m = {2: BRICK_METATILES, 3: SOLID_METATILES, 4: COIN_METATILES}[kind][kind_of_area]
+            for k in range(length + 1):
+                put(c + k, row, m)
+        elif row <= 11 and kind in (5, 6):             # columns of bricks, solid blocks
+            m = {5: BRICK_METATILES, 6: SOLID_METATILES}[kind][kind_of_area]
+            for k in range(length + 1):
+                put(c, row + k, m)
+        elif row <= 11 and kind == 7:                  # vertical pipe; bit 3: it can be entered
+            enter = bool(b2 & 0x08)
+            put(c, row, 0x10 if enter else 0x12)
+            put(c + 1, row, 0x11 if enter else 0x13)
+            for k in range(1, (b2 & 0x07) + 1):
+                put(c, row + k, 0x14)
+                put(c + 1, row + k, 0x15)
+            pipes.append((c, row, enter))
+        elif row == 0x0F and kind == 4:                # exit pipe: sideways, joined to a pipe going up
+            shaft = length - 2                         # the upward pipe covers rows 0..length-2
+            for k, (top, bottom) in enumerate(((0x1C, 0x1F), (0x1D, 0x20), (0x1E, 0x21), (0x15, 0x15))):
+                if k >= 2:
+                    for r in range(shaft + 1):
+                        put(c + k, r, 0x14 if k == 2 else 0x15)
+                put(c + k, shaft + 1, top)
+                put(c + k, shaft + 2, bottom)
+        elif row in (0x0D, 0x0E):
+            pass                                       # scroll locks and such; terrain changes (done above)
+        elif strict:
+            sys.exit("area %02X: object %02X %02X at column %d isn't handled yet" % (ptr, b1, b2, c))
+    return header, grid, pipes
+
+
+def metatile_to_scenery(m):
+    """SMB metatile number -> SCENERY_* number (SceneryTiles lists the groups in order)"""
+    return sum(len(names) for names in METATILE_NAMES[:m >> 6]) + (m & 0x3F)
+
+
+def write_bonus_room(prg):
+    """Level1_1Bonus (bank 1): the underground coin room 1-1's pipe leads to, and where the pipes are"""
+    # 1-1's warp: its enterable pipe leads to an area that holds several worlds' rooms
+    page, room_area, _, room_page = [w for w in read_warps(prg, AREA_1_1) if w[2] == 0][0]
+    _, grid_1_1, pipes_1_1 = decode_area(prg, AREA_1_1, 16 * 14, strict=False)
+    entry = [p for p in pipes_1_1 if p[2] and p[0] >= page * 16][0]
+    # World 1's room: from its first page up to the next scroll lock
+    first = room_page * 16
+    i = area_address(prg, room_area, AREA_DATA_H_OFFSETS, AREA_DATA_LOW, AREA_DATA_HIGH) - 0x8000 + 2
+    width, pg = None, 0
+    while prg[i] != 0xFD and width is None:
+        if prg[i + 1] & 0x80:
+            pg += 1
+        if prg[i] & 0x0F == 0x0D and prg[i + 1] & 0x40 and (prg[i + 1] & 0x3F) in (5, 6, 7):
+            width = pg * 16 + (prg[i] >> 4) - first
+        i += 2
+    header, grid, _ = decode_area(prg, room_area, first + width)
+    grid = grid[first:]
+    exit_column = [c for c in range(width) for r in range(AREA_ROWS) if grid[c][r] == 0x1C][0]
+    exit_row = [r for r in range(AREA_ROWS) if grid[exit_column][r] == 0x1C][0]
+    # Where the room's own warp leads back to in 1-1: the pipe on that page
+    back_page = [w for w in read_warps(prg, room_area) if w[1] == AREA_1_1 and w[2] == 0][0][3]
+    back = [p for p in pipes_1_1 if back_page * 16 <= p[0] < back_page * 16 + 16][0]
+    start_y = PLAYER_START_Y[(header[0] >> 3) & 7]
+    start_x = PLAYER_START_X & ~15   # SMB's narrower collision box fits at $28; ours is 16 wide
+
+    rows = [[0] * width for _ in range(AREA_ROWS + MAP_ROW_OFFSET)]
+    for c in range(width):
+        for r in range(AREA_ROWS):
+            rows[r + MAP_ROW_OFFSET][c] = metatile_to_scenery(grid[c][r]) if grid[c][r] else 0
+    h = ["/*", " LEVEL1_1BONUS.H", "",
+         " World 1-1's underground coin room, read from Super Mario Bros.' own level data,",
+         " as a grid of 16x16 blocks (SCENERY_* numbers) %d wide by %d tall, row by row," % (width, len(rows)),
+         " and where the pipes in and out of it are.", "",
+         " Generated by tools/nes2gb.py from the Super Mario Bros. (NES) ROM.",
+         " Do not edit; change the script and rerun it.", "*/",
+         "#ifndef __Level1_1Bonus_h_INCLUDE", "#define __Level1_1Bonus_h_INCLUDE", "",
+         "#include <gbdk/platform.h>", "",
+         "#define Level1_1BonusWidth %d" % width, "#define Level1_1BonusHeight %d" % len(rows), "",
+         "// 1-1's pipe that leads here: its left block column, and the block row of its top",
+         "#define LEVEL1_1_PIPE_COLUMN %d" % entry[0], "#define LEVEL1_1_PIPE_ROW %d" % (entry[1] + MAP_ROW_OFFSET), "",
+         "// Where Mario drops into the room (level pixels, top-left)",
+         "#define LEVEL1_1_BONUS_START_X %d" % start_x, "#define LEVEL1_1_BONUS_START_Y %d" % start_y, "",
+         "// The way out: the sideways pipe's mouth (block column, block row of its top half)",
+         "#define LEVEL1_1_BONUS_EXIT_COLUMN %d" % exit_column,
+         "#define LEVEL1_1_BONUS_EXIT_ROW %d" % (exit_row + MAP_ROW_OFFSET), "",
+         "// ...which leads back to 1-1's pipe here (left block column, block row of its top)",
+         "#define LEVEL1_1_RETURN_PIPE_COLUMN %d" % back[0],
+         "#define LEVEL1_1_RETURN_PIPE_ROW %d" % (back[1] + MAP_ROW_OFFSET), "",
+         "// In switchable ROM bank 1 (maps): switch to BANK(Level1_1Bonus) before reading it",
+         "BANKREF_EXTERN(Level1_1Bonus)", "extern const unsigned char Level1_1Bonus[];", "", "#endif", ""]
+    c = ["/*", " LEVEL1_1BONUS.C", "", " See Level1_1Bonus.h.", "",
+         " Generated by tools/nes2gb.py from the Super Mario Bros. (NES) ROM.",
+         " Do not edit; change the script and rerun it.", "*/", "",
+         "#pragma bank 1", "", "#include <gbdk/platform.h>", "", "BANKREF(Level1_1Bonus)", "",
+         "const unsigned char Level1_1Bonus[] =", "{"]
+    for row in rows:
+        c.append("  " + ",".join("%3d" % v for v in row) + ",")
+    c += ["};", ""]
+    out = os.path.join(ROOT, "assets", "maps", "Level1_1Bonus")
+    open(out + ".h", "w", newline="\n").write("\n".join(h))
+    open(out + ".c", "w", newline="\n").write("\n".join(c))
+    print("wrote assets/maps/Level1_1Bonus.c/.h (%dx%d; 1-1 pipe at block %d, back out at block %d)"
+          % (width, len(rows), entry[0], back[0]))
 
 # SMB's metatile tables (MetatileGraphics_Low/High) in PRG: 4 palette groups,
 # 4 tile numbers per metatile in TL, BL, TR, BR order. Names follow the disassembly.

@@ -3,20 +3,34 @@
 
 #include <stdint.h>
 #include "Level1_1.h"
+#include "Level1_1Bonus.h"
 #include "SceneryTiles.h"
 
+// The areas Mario can be in: World 1-1 and its underground coin room
+#define AREA_1_1       0
+#define AREA_1_1_BONUS 1
+
 // The map is a grid of 16x16 blocks (SCENERY_* numbers); positions below are
-// in 8x8 tiles or pixels unless they say "block"
-#define LEVEL_COLUMNS (Level1_1Width * 2)
-#define LEVEL_ROWS (Level1_1Height * 2)
-#define LEVEL_WIDTH (LEVEL_COLUMNS * 8)
+// in 8x8 tiles or pixels unless they say "block". Every area is 15 blocks
+// tall; the width depends on the area.
+#define LEVEL_BLOCK_ROWS Level1_1Height
+#define LEVEL_ROWS (LEVEL_BLOCK_ROWS * 2)
 #define LEVEL_HEIGHT (LEVEL_ROWS * 8)
+#define LEVEL_COLUMNS levelColumns
+#define LEVEL_WIDTH levelPixelWidth
+
+extern uint8_t levelArea;        // AREA_*
+extern uint8_t levelWidth;       // in blocks
+extern int16_t levelColumns;     // in 8x8 tiles
+extern int16_t levelPixelWidth;
+extern uint8_t levelUnderground; // dark, with a black sky
+extern uint8_t levelCoins;       // loose coins left to collect (see blocksCollectCoins)
 
 // Build the block tables (once at power on)
 void levelInit(void);
 
-// Load the level's map and tiles, and fill VRAM with the columns visible from cameraX
-void levelLoad(int16_t cameraX);
+// Load an area's map and tiles, and fill VRAM with the columns visible from cameraX
+void levelLoad(uint8_t area, int16_t cameraX);
 
 // Copy any columns newly scrolled into view into VRAM
 void levelStream(int16_t cameraX);

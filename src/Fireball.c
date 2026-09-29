@@ -31,6 +31,10 @@ static struct {
     int16_t velocityY;
 } fireballs[MAX_FIREBALLS];
 
+// Is anything showing? Most frames nothing is, and then update and draw
+// return straight away (looping over the empty slots cost several scanlines)
+static uint8_t busy;
+
 void fireballsInit(void) BANKED {
     bankedSetSpriteData(SPR_TILE_FIREBALL, 1, ItemTiles + ITEMTILES_FIREBALL * 16, BANK(ItemTiles));
     // small, medium and large are consecutive
@@ -40,6 +44,7 @@ void fireballsInit(void) BANKED {
 void fireballsReset(void) BANKED {
     uint8_t i;
     for (i = 0; i < MAX_FIREBALLS; i++) fireballs[i].state = NONE;
+    busy = 0;
 }
 
 uint8_t fireballThrow(int16_t x, int16_t y, uint8_t left) BANKED {
@@ -53,6 +58,7 @@ uint8_t fireballThrow(int16_t x, int16_t y, uint8_t left) BANKED {
     fireballs[i].body.width = 8;
     fireballs[i].body.height = 8;
     fireballs[i].state = FLYING;
+    busy = 1;
     fireballs[i].timer = 0;
     fireballs[i].subX = fireballs[i].subY = 0;
     fireballs[i].speed = left ? -FIREBALL_SPEED : FIREBALL_SPEED;
@@ -93,17 +99,21 @@ static void fly(uint8_t i) {
 
 void fireballsUpdate(void) BANKED {
     uint8_t i;
+    if (!busy) return;
+    busy = 0;
     for (i = 0; i < MAX_FIREBALLS; i++) {
         if (fireballs[i].state == FLYING) {
             fly(i);
         } else if (fireballs[i].state == EXPLODING) {
             if (++fireballs[i].timer >= 3 * EXPLOSION_FRAME_TIME) fireballs[i].state = NONE;
         }
+        busy |= fireballs[i].state;
     }
 }
 
 void fireballsDraw(void) BANKED {
     uint8_t i, size;
+    if (!busy) return;
     for (i = 0; i < MAX_FIREBALLS; i++) {
         if (fireballs[i].state == FLYING) {
             // spins by flipping

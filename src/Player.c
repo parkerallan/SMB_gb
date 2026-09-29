@@ -141,11 +141,30 @@ void playerSetPose(uint8_t newPose) {
         starTimer = 0;
         invincibleTimer = 0;
         throwTimer = 0;
+    } else if (pose == POSE_PIPE) {
+        velocityY = 0;
+        subY = 0;
+        onGround = 1;
+        moving = 0;
+        crouching = 0;
+        throwTimer = 0;
     }
 }
 
 void playerFaceLeft(uint8_t left) {
     facingLeft = left;
+}
+
+static void animateWalk(void) {
+    if (++walkTimer >= WALK_ANIM_FRAMES) {
+        walkTimer = 0;
+        if (++walkFrame >= 3) walkFrame = 0;
+    }
+}
+
+void playerAnimateWalk(void) {
+    moving = 1;
+    animateWalk();
 }
 
 void playerFire(void) {
@@ -323,12 +342,7 @@ void playerUpdate(uint8_t input) {
 
     applyGravity();
 
-    if (moving && onGround) {
-        if (++walkTimer >= WALK_ANIM_FRAMES) {
-            walkTimer = 0;
-            if (++walkFrame >= 3) walkFrame = 0;
-        }
-    }
+    if (moving && onGround) animateWalk();
 }
 
 static uint8_t palette; // S_PALETTE while fire or star Mario, else 0
@@ -370,6 +384,7 @@ void playerDraw(void) {
 
     choosePalette();
     if (pose == POSE_HIDDEN) return;
+    if (pose == POSE_PIPE) palette |= S_PRIORITY; // behind the pipe
     if (pose == POSE_POLE) {
         if (big) drawBig(SPR_TILE_BIG_FIRE, sx, sy);
         else     drawSmall(mario_metasprite, SPR_TILE_BIG_FIRE, sx, sy);

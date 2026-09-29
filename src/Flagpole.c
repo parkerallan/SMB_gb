@@ -56,8 +56,8 @@ void flagpoleReset(void) BANKED {
     // The pole and the castle are at the end of the level: look through it
     // column by column from the right, and stop after the pole's column
     // (checking every block of the level took about a second)
-    for (bx = Level1_1Width - 1; bx >= 0 && !hasPole; bx--) {
-        for (by = 0; by < Level1_1Height; by++) {
+    for (bx = levelWidth - 1; bx >= 0 && !hasPole; bx--) {
+        for (by = 0; by < LEVEL_BLOCK_ROWS; by++) {
             block = levelBlockAt(bx, by);
             if (block == SCENERY_FLAGPOLE_BALL) {
                 poleX = (bx << 4) + 8;

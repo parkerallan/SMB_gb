@@ -41,6 +41,12 @@ void cameraFollow(const struct GameCharacter *target) {
     if (cameraY > CAMERA_MAX_Y) cameraY = CAMERA_MAX_Y;
 }
 
+void cameraJumpTo(const struct GameCharacter *target) {
+    cameraX = target->x - CAMERA_LEFT_X;
+    cameraY = CAMERA_MAX_Y;
+    cameraFollow(target);
+}
+
 void cameraApply(void) {
     move_bkg((uint8_t)cameraX, (uint8_t)cameraY);
     levelStream(cameraX);

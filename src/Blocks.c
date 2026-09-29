@@ -48,6 +48,10 @@ static struct {
     int16_t x, y, vy;
 } fragments[4];
 
+// Is anything showing? Most frames nothing is, and then update and draw
+// return straight away (looping over the empty slots cost several scanlines)
+static uint8_t busy;
+
 static uint8_t isQuestion(uint8_t block) {
     return block == SCENERY_QUESTION_COIN || block == SCENERY_QUESTION_POWERUP;
 }
@@ -90,6 +94,7 @@ void blocksReset(void) BANKED {
     bump.active = 0;
     for (i = 0; i < MAX_COINS; i++) coinEffects[i].active = 0;
     for (i = 0; i < 4; i++) fragments[i].active = 0;
+    busy = 0;
 }
 
 static void setBlockTiles(int16_t tx, uint8_t ty, const uint8_t *tiles) {
@@ -116,6 +121,7 @@ static void startBump(int16_t tx, uint8_t ty, uint8_t becomes) {
     else if (isLineBrick(becomes))     bump.sprite = SPR_TILE_BRICK_LINE;
     else                               bump.sprite = SPR_TILE_BRICK;
     bump.active = 1;
+    busy = 1;
     bump.frame = 0;
     bump.tx = tx;
     bump.ty = ty;
@@ -130,6 +136,7 @@ static void spawnCoin(int16_t tx, uint8_t ty) {
     }
     if (i == MAX_COINS) i = 0; // reuse the oldest slot
     coinEffects[i].active = 1;
+    busy = 1;
     coinEffects[i].timer = 0;
     coinEffects[i].sub = 0;
     coinEffects[i].x = (tx << 3) + 4;           // centered over the 16px block
@@ -144,6 +151,7 @@ static void breakBrick(int16_t tx, uint8_t ty) {
     levelSetBlock(tx >> 1, ty >> 1, SCENERY_BLANK);
     for (i = 0; i < 4; i++) {
         fragments[i].active = 1;
+        busy = 1;
         fragments[i].timer = 0;
         fragments[i].subX = fragments[i].subY = 0;
         fragments[i].x = (tx << 3) + ((i & 1) << 3);
@@ -151,6 +159,21 @@ static void breakBrick(int16_t tx, uint8_t ty) {
         fragments[i].vy = fragmentSpeedY[i];
     }
     gameAddScore(BRICK_POINTS);
+}
+
+void blocksCollectCoins(void) BANKED {
+    int16_t bx, by;
+    int16_t left = mario.x >> 4, right = (mario.x + mario.width - 1) >> 4;
+    int16_t bottom = (mario.y + mario.height - 1) >> 4;
+    for (by = mario.y >> 4; by <= bottom; by++) {
+        for (bx = left; bx <= right; bx++) {
+            if (levelBlockAt(bx, by) == SCENERY_COIN) {
+                levelSetBlock(bx, by, SCENERY_BLANK);
+                levelCoins--;
+                gameCollectCoin();
+            }
+        }
+    }
 }
 
 void blocksHit(int16_t tx, int16_t ty) BANKED {
@@ -213,15 +236,24 @@ static void updateFragment(uint8_t i) {
 
 void blocksUpdate(void) BANKED {
     uint8_t i;
+    if (!busy) return;
     if (bump.active && ++bump.frame >= sizeof(bumpOffsets)) finishBump();
-    for (i = 0; i < MAX_COINS; i++) updateCoin(i);
-    for (i = 0; i < 4; i++) updateFragment(i);
+    busy = bump.active;
+    for (i = 0; i < MAX_COINS; i++) {
+        updateCoin(i);
+        busy |= coinEffects[i].active;
+    }
+    for (i = 0; i < 4; i++) {
+        updateFragment(i);
+        busy |= fragments[i].active;
+    }
 }
 
 void blocksDraw(void) BANKED {
     uint8_t i, frame;
     int16_t x, y;
 
+    if (!busy) return;
     if (bump.active) {
         x = bump.tx << 3;
         y = (bump.ty << 3) + bumpOffsets[bump.frame];
