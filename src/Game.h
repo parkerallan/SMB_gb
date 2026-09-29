@@ -17,6 +17,12 @@ void gameNew(void);
 // Show the world screen, then (re)start the current level from the beginning
 void gameEnterLevel(void);
 
+// Add points and show them in the HUD
+void gameAddScore(uint16_t points);
+
+// Extra life (shown in the HUD)
+void gameAddLife(void);
+
 // Mario got a coin: +200 points, and every 100 coins is an extra life
 void gameCollectCoin(void);
 

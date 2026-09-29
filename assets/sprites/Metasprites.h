@@ -8,5 +8,6 @@ extern const metasprite_t mario_jump_metasprite[];
 extern const metasprite_t mario_walk_frame1[];
 extern const metasprite_t mario_walk_frame2[];
 extern const metasprite_t mario_walk_frame3[];
+extern const metasprite_t big_mario_metasprite[];
 
 #endif

@@ -1,14 +1,12 @@
 #include <gb/gb.h>
+#include "Util.h"
 #include "Font.h"
 #include "FontTiles.h"
 
 static const char fontChars[] = FONT_CHARS;
 
 void fontLoad(void) {
-    uint8_t saved = CURRENT_BANK;
-    SWITCH_ROM(BANK(FontTiles));
-    set_bkg_data(FONT_FIRST_TILE, FontTilesCount, FontTiles);
-    SWITCH_ROM(saved);
+    bankedSetBkgData(FONT_FIRST_TILE, FontTilesCount, FontTiles, BANK(FontTiles));
 }
 
 uint8_t fontTile(char c) {

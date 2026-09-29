@@ -15,7 +15,7 @@
 // Build the block tables (once at power on)
 void levelInit(void);
 
-// Load the level's tiles and fill VRAM with the columns visible from cameraX
+// Load the level's map and tiles, and fill VRAM with the columns visible from cameraX
 void levelLoad(int16_t cameraX);
 
 // Copy any columns newly scrolled into view into VRAM
@@ -30,6 +30,9 @@ uint8_t levelRowSolid(int16_t ty, int16_t left, int16_t right);
 
 // Block (SCENERY_*) at block coordinates, SCENERY_BLANK outside the level
 uint8_t levelBlockAt(int16_t bx, int16_t by);
+
+// Change a block (e.g. a hit ? block becomes USED_BLOCK) and redraw it if on screen
+void levelSetBlock(int16_t bx, int16_t by, uint8_t block);
 
 // The 4 background tiles that draw a block: TL, TR, BL, BR
 const uint8_t *levelBlockTiles(uint8_t block);

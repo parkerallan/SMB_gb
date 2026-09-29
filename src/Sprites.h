@@ -1,26 +1,49 @@
 #ifndef SPRITES_H
 #define SPRITES_H
 
+#include <stdint.h>
+#include <gb/metasprites.h>
 #include "MarioTiles.h"
 
-// Where each part of the game keeps its sprite tiles in video memory
-#define SPR_TILE_MARIO      0                                        // MarioTilesCount tiles
-#define SPR_TILE_BRICK_LINE (SPR_TILE_MARIO + MarioTilesCount)       // 4: bumped brick, TL TR BL BR
-#define SPR_TILE_BRICK      (SPR_TILE_BRICK_LINE + 4)                // 4: bumped plain brick
-#define SPR_TILE_USED       (SPR_TILE_BRICK + 4)                     // 4: bumped used block
-#define SPR_TILE_COIN       (SPR_TILE_USED + 4)                      // 8: 4 spin frames x (top, bottom)
-#define SPR_TILE_SCORE20    (SPR_TILE_COIN + 8)                      // "20"
-#define SPR_TILE_SCORE0     (SPR_TILE_SCORE20 + 1)                   // "0"
-#define SPR_TILE_FLAG       (SPR_TILE_SCORE0 + 1)                    // 4: flagpole flag, TL BL TR BR
+// Where each part of the game keeps its sprite tiles in video memory. Tiles
+// 128-155 are shared with the level's scenery tiles and 215-255 with the font,
+// so sprites use 0-127 and 156-214.
+#define SPR_SMALL_MARIO_TILES MARIOTILES_SKID   // small Mario's stand, walk and jump frames
+#define SPR_TILE_MARIO       0                                          // small Mario
+#define SPR_TILE_MARIO_DEAD  (SPR_TILE_MARIO + SPR_SMALL_MARIO_TILES)    // 4: TL BL TR BR
+#define SPR_TILE_BIG_MARIO   (SPR_TILE_MARIO_DEAD + 4)                   // 56: 7 big frames x 8
+#define SPR_TILE_BRICK_LINE  (SPR_TILE_BIG_MARIO + 56)                   // 4: bumped brick, TL TR BL BR
+#define SPR_TILE_BRICK       (SPR_TILE_BRICK_LINE + 4)                   // 4: bumped plain brick
+#define SPR_TILE_USED        (SPR_TILE_BRICK + 4)                        // 4: bumped used block
+#define SPR_TILE_COIN        (SPR_TILE_USED + 4)                         // 8: 4 spin frames x (top, bottom)
+#define SPR_TILE_FLAG        (SPR_TILE_COIN + 8)                         // 4: flagpole flag, TL BL TR BR
+#define SPR_TILE_MUSHROOM    (SPR_TILE_FLAG + 4)                         // 4: TL BL TR BR
+#define SPR_TILE_BRICK_PIECE (SPR_TILE_MUSHROOM + 4)                     // 1
+#define SPR_TILE_SCORE       ((uint8_t)156)                             // 9: see Popup.c
+#define SPR_TILE_ENEMIES     ((uint8_t)(SPR_TILE_SCORE + 9))             // see Enemies.c
 
 // Hardware sprite coordinates are offset from the screen by (8, 16)
 #define SPRITE_OFFSET_X 8
 #define SPRITE_OFFSET_Y 16
 
-// Which hardware sprites (OAM entries) each part of the game uses
-#define OAM_MARIO 0  // 4
-#define OAM_BUMP  4  // 4: block bouncing after a hit
-#define OAM_COINS 8  // 3 per coin effect, 2 effects
-#define OAM_FLAG  14 // 4
+// Hardware sprites are handed out afresh every frame, in drawing order, to
+// whatever is on screen: call spritesBegin(), draw everything, then spritesEnd().
+void spritesBegin(void);
+void spritesEnd(void);   // hides the hardware sprites nobody used this frame
+
+// One 8x8 sprite at a level position; skipped when off screen, under the HUD,
+// or when all 40 hardware sprites are taken
+void spriteDraw(uint8_t tile, uint8_t props, int16_t x, int16_t y);
+
+// A 16x16 frame of 4 tiles stored TL, BL, TR, BR, and a Koopa's 16x24 frame of
+// 6 tiles row by row (TL blank), at a level position. `props` can mirror them
+// (S_FLIPX, S_FLIPY) or put them behind the background (S_PRIORITY). Skipped
+// when off screen, under the HUD, or out of hardware sprites.
+void spriteDraw16(uint8_t first, uint8_t props, int16_t x, int16_t y);
+void spriteDrawKoopa(uint8_t first, uint8_t props, int16_t x, int16_t y);
+
+// For metasprites: draw at hardware sprite spritesNext(), then report how many were used
+uint8_t spritesNext(void);
+void spritesAdvance(uint8_t count);
 
 #endif

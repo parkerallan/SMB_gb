@@ -7,7 +7,7 @@ cd /d "%~dp0"
 if not exist build mkdir build
 
 rem Every .c file in src and assets is part of the ROM. MBC1 cartridge, 4 x 16KB banks:
-rem code in bank 0, maps in bank 1, tiles in bank 2
+rem core code in bank 0, maps in bank 1, tiles in bank 2, level-object code in bank 3
 set SRC=
 for %%f in (src\*.c assets\sprites\*.c assets\tiles\*.c assets\maps\*.c) do set SRC=!SRC! %%f
 

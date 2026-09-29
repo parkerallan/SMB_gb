@@ -1,22 +1,21 @@
+// Level objects are banked code: ROM bank 3 (see make.bat)
+#pragma bank 3
+
 #include <gb/gb.h>
+#include "Util.h"
 #include "Flagpole.h"
 #include "Level.h"
-#include "Camera.h"
 #include "ItemTiles.h"
 #include "Sprites.h"
 
 static uint8_t hasFlag;
 static int16_t flagX, flagY; // top-left of the 16x16 flag, in level pixels
 
-void flagpoleInit(void) {
-    uint8_t i, saved = CURRENT_BANK;
-    SWITCH_ROM(BANK(ItemTiles));
-    set_sprite_data(SPR_TILE_FLAG, 4, ItemTiles + ITEMTILES_FLAG * 16);
-    SWITCH_ROM(saved);
-    for (i = 0; i < 4; i++) set_sprite_tile(OAM_FLAG + i, SPR_TILE_FLAG + i);
+void flagpoleInit(void) BANKED {
+    bankedSetSpriteData(SPR_TILE_FLAG, 4, ItemTiles + ITEMTILES_FLAG * 16, BANK(ItemTiles));
 }
 
-void flagpoleReset(void) {
+void flagpoleReset(void) BANKED {
     int16_t bx, by;
     hasFlag = 0;
     for (by = 0; by < Level1_1Height && !hasFlag; by++) {
@@ -32,11 +31,8 @@ void flagpoleReset(void) {
     }
 }
 
-void flagpoleDraw(void) {
+void flagpoleDraw(void) BANKED {
     if (!hasFlag) return;
     // ItemTiles' flag is TL, BL, TR, BR
-    cameraPlaceSprite(OAM_FLAG, flagX, flagY);
-    cameraPlaceSprite(OAM_FLAG + 1, flagX, flagY + 8);
-    cameraPlaceSprite(OAM_FLAG + 2, flagX + 8, flagY);
-    cameraPlaceSprite(OAM_FLAG + 3, flagX + 8, flagY + 8);
+    spriteDraw16(SPR_TILE_FLAG, 0, flagX, flagY);
 }

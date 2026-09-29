@@ -1,14 +1,10 @@
 #include <gb/gb.h>
+#include "Util.h"
 #include <string.h>
 #include "Level.h"
-#include "Blocks.h"
 
 // The VRAM background map is 32 tiles wide and wraps around
 #define VRAM_COLUMNS 32
-
-// Bank rule: while a level is being played, the map's ROM bank stays switched
-// in, because collision and scrolling read the map every frame. Anything that
-// switches to another bank must switch back afterwards.
 
 // Blocks Mario can't pass through; everything else (sky, hills, bushes, clouds,
 // castle, flagpole, coins, water, hidden blocks until hit) is scenery
@@ -32,15 +28,21 @@ static const uint8_t solidBlocks[] = {
 
 static uint8_t blockSolid[SceneryMetatileCount];
 static uint8_t blockTiles[SceneryMetatileCount * 4]; // copy of SceneryMetatiles, read every column
+// Working copy of the level map: hit blocks change it, and it's refilled from ROM
+// every time the level (re)starts
+static uint8_t map[Level1_1Width * Level1_1Height];
+// Start of each block row in `map`: the Game Boy has no multiply instruction,
+// and these lookups run many times a frame for Mario and every enemy
+static uint16_t rowStart[Level1_1Height];
 static int16_t firstColumn, lastColumn;               // range of level columns currently in VRAM
 static uint8_t columnBuffer[LEVEL_ROWS];
 
 void levelInit(void) {
-    uint8_t i, saved = CURRENT_BANK;
-    SWITCH_ROM(BANK(SceneryTiles));
-    memcpy(blockTiles, SceneryMetatiles, sizeof(blockTiles));
-    SWITCH_ROM(saved);
+    uint8_t i;
+    uint16_t start = 0;
+    bankedMemcpy(blockTiles, SceneryMetatiles, sizeof(blockTiles), BANK(SceneryTiles));
     for (i = 0; i < sizeof(solidBlocks); i++) blockSolid[solidBlocks[i]] = 1;
+    for (i = 0; i < Level1_1Height; i++, start += Level1_1Width) rowStart[i] = start;
 }
 
 const uint8_t *levelBlockTiles(uint8_t block) {
@@ -49,7 +51,7 @@ const uint8_t *levelBlockTiles(uint8_t block) {
 
 // Copy one full-height level column (half a block column) into the wrapping VRAM map
 static void loadColumn(int16_t column) {
-    const uint8_t *src = Level1_1 + (column >> 1);
+    const uint8_t *src = map + (column >> 1);
     uint8_t half = column & 1; // 0 = left tiles of each block, 1 = right tiles
     uint8_t row;
     const uint8_t *tiles;
@@ -59,14 +61,12 @@ static void loadColumn(int16_t column) {
         columnBuffer[row + 1] = tiles[2];
         src += Level1_1Width;
     }
-    blocksPatchColumn(column, columnBuffer);
     set_bkg_tiles(column & (VRAM_COLUMNS - 1), 0, 1, LEVEL_ROWS, columnBuffer);
 }
 
 void levelLoad(int16_t cameraX) {
-    SWITCH_ROM(BANK(SceneryTiles));
-    set_bkg_data(0, SceneryTilesCount, SceneryTiles);
-    SWITCH_ROM(BANK(Level1_1)); // stays switched in for the rest of the level
+    bankedMemcpy(map, Level1_1, sizeof(map), BANK(Level1_1));
+    bankedSetBkgData(0, SceneryTilesCount, SceneryTiles, BANK(SceneryTiles));
     firstColumn = cameraX >> 3;
     lastColumn = firstColumn;
     loadColumn(firstColumn);
@@ -81,6 +81,14 @@ void levelStream(int16_t cameraX) {
     if (firstNeeded < 0) firstNeeded = 0;
     if (lastNeeded >= LEVEL_COLUMNS) lastNeeded = LEVEL_COLUMNS - 1;
 
+    // The camera jumped (e.g. a warp): skip straight to the columns now on screen
+    // instead of drawing every column in between
+    if (lastNeeded - lastColumn >= VRAM_COLUMNS || firstColumn - firstNeeded >= VRAM_COLUMNS) {
+        firstColumn = firstNeeded;
+        lastColumn = firstNeeded;
+        loadColumn(firstColumn);
+    }
+
     while (lastColumn < lastNeeded) {
         loadColumn(++lastColumn);
         if (lastColumn - firstColumn >= VRAM_COLUMNS) firstColumn = lastColumn - (VRAM_COLUMNS - 1);
@@ -92,8 +100,18 @@ void levelStream(int16_t cameraX) {
 }
 
 uint8_t levelBlockAt(int16_t bx, int16_t by) {
-    if (bx < 0 || bx >= Level1_1Width || by < 0 || by >= Level1_1Height) return SCENERY_BLANK;
-    return Level1_1[by * Level1_1Width + bx];
+    if ((uint16_t)bx >= Level1_1Width || (uint16_t)by >= Level1_1Height) return SCENERY_BLANK;
+    return map[rowStart[by] + bx];
+}
+
+void levelSetBlock(int16_t bx, int16_t by, uint8_t block) {
+    const uint8_t *tiles = blockTiles + block * 4;
+    int16_t tx = bx << 1, ty = by << 1;
+    map[rowStart[by] + bx] = block;
+    levelSetTile(tx, ty, tiles[0]);
+    levelSetTile(tx + 1, ty, tiles[1]);
+    levelSetTile(tx, ty + 1, tiles[2]);
+    levelSetTile(tx + 1, ty + 1, tiles[3]);
 }
 
 void levelSetTile(int16_t tx, int16_t ty, uint8_t tile) {
@@ -103,23 +121,41 @@ void levelSetTile(int16_t tx, int16_t ty, uint8_t tile) {
 }
 
 uint8_t levelTileSolid(int16_t tx, int16_t ty) {
-    if (tx < 0 || tx >= LEVEL_COLUMNS) return 1; // level edges are walls
-    if (ty < 0 || ty >= LEVEL_ROWS) return 0;    // open sky above, pits below
-    return blockSolid[Level1_1[(ty >> 1) * Level1_1Width + (tx >> 1)]];
+    if ((uint16_t)tx >= LEVEL_COLUMNS) return 1; // level edges are walls (negatives wrap huge)
+    if ((uint16_t)ty >= LEVEL_ROWS) return 0;    // open sky above, pits below
+    return blockSolid[map[rowStart[ty >> 1] + (tx >> 1)]];
 }
 
+// Solidity is per 16x16 block, so these check whole blocks (a 16-pixel body
+// spans at most 2) and look the block row up once. They run several times a
+// frame for Mario and every enemy, so they avoid per-tile function calls.
 uint8_t levelColumnSolid(int16_t tx, int16_t top, int16_t bottom) {
-    int16_t ty;
-    for (ty = top >> 3; ty <= (bottom >> 3); ty++) {
-        if (levelTileSolid(tx, ty)) return 1;
+    int16_t bx = tx >> 1;
+    int16_t by, byEnd;
+    const uint8_t *cell;
+    if ((uint16_t)bx >= Level1_1Width) return 1; // level edges are walls
+    if (bottom < 0) return 0;                    // entirely above the level
+    by = (top < 0) ? 0 : (top >> 4);
+    byEnd = bottom >> 4;
+    if (byEnd >= Level1_1Height) byEnd = Level1_1Height - 1; // pits below
+    cell = map + rowStart[by] + bx;
+    for (; by <= byEnd; by++, cell += Level1_1Width) {
+        if (blockSolid[*cell]) return 1;
     }
     return 0;
 }
 
 uint8_t levelRowSolid(int16_t ty, int16_t left, int16_t right) {
-    int16_t tx;
-    for (tx = left >> 3; tx <= (right >> 3); tx++) {
-        if (levelTileSolid(tx, ty)) return 1;
+    int16_t by = ty >> 1;
+    int16_t bx, bxEnd;
+    const uint8_t *row;
+    if ((uint16_t)by >= Level1_1Height) return 0; // open sky above, pits below
+    bx = left >> 4;
+    bxEnd = right >> 4;
+    if (bx < 0 || bxEnd >= Level1_1Width) return 1; // level edges are walls
+    row = map + rowStart[by];
+    for (; bx <= bxEnd; bx++) {
+        if (blockSolid[row[bx]]) return 1;
     }
     return 0;
 }

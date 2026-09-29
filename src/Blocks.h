@@ -2,22 +2,22 @@
 #define BLOCKS_H
 
 #include <stdint.h>
+#include <gb/gb.h>
 
-// ? blocks and bricks: bumping, emptying ? blocks, and the coins they give
+// ? blocks and bricks: bumping, emptying ? blocks (coin or mushroom), and big
+// Mario breaking bricks
 
 // Load block and coin graphics
-void blocksInit(void);
+void blocksInit(void) BANKED;
 
-// Forget emptied blocks and clear effects (level restart)
-void blocksReset(void);
+// Clear effects (level restart; the level itself refills the blocks)
+void blocksReset(void) BANKED;
 
 // Mario's head hit the solid tile at (tx, ty)
-void blocksHit(int16_t tx, int16_t ty);
+void blocksHit(int16_t tx, int16_t ty) BANKED;
 
-// Animate bumps and coins, relative to the camera
-void blocksUpdate(void);
-
-// Swap emptied ? blocks into a level column as it streams into VRAM
-void blocksPatchColumn(int16_t column, uint8_t *tiles);
+// Animate bumps, coins and brick pieces
+void blocksUpdate(void) BANKED;
+void blocksDraw(void) BANKED;
 
 #endif

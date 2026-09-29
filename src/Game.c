@@ -7,6 +7,10 @@
 #include "Screens.h"
 #include "Blocks.h"
 #include "Flagpole.h"
+#include "Powerup.h"
+#include "Enemies.h"
+#include "Popup.h"
+#include "Sprites.h"
 #include "Util.h"
 
 #define START_LIVES 4
@@ -35,6 +39,9 @@ void gameInit(void) {
     levelInit();
     playerInit();
     blocksInit();
+    powerupInit();
+    enemiesInit();
+    popupsInit();
     flagpoleInit();
 }
 
@@ -46,16 +53,31 @@ void gameNew(void) {
     level = 1;
 }
 
+// Every sprite, drawn fresh each frame (also while the game is paused)
+static void drawSprites(void) {
+    spritesBegin();
+    playerDraw();
+    enemiesDraw();
+    powerupDraw();
+    blocksDraw();
+    popupsDraw();
+    flagpoleDraw();
+    spritesEnd();
+}
+
 // Load the level with the screen off so it appears all at once
 static void startLevel(void) {
     DISPLAY_OFF;
     playerReset();
     cameraReset();
-    blocksReset(); // SMB refills blocks when you die; coins and score carry over
+    blocksReset(); // the level refills its blocks; coins and score carry over
+    powerupReset();
+    popupsReset();
     levelLoad(cameraX);
+    enemiesReset();
     flagpoleReset();
     timeFrames = 0;
-    playerDraw();
+    drawSprites();
     SHOW_SPRITES;
     DISPLAY_ON;
 }
@@ -67,12 +89,21 @@ void gameEnterLevel(void) {
     startLevel();
 }
 
+void gameAddScore(uint16_t points) {
+    score += points;
+    hudUpdateScore(score, coins);
+}
+
+void gameAddLife(void) {
+    lives++;
+    refreshHud();
+}
+
 void gameCollectCoin(void) {
     score += COIN_POINTS;
     if (++coins >= COINS_PER_LIFE) {
         coins = 0;
-        lives++;
-        refreshHud();
+        gameAddLife();
     } else {
         hudUpdateScore(score, coins);
     }
@@ -100,15 +131,26 @@ static uint8_t tickClock(void) {
 }
 
 void gameUpdate(void) {
-    playerUpdate(joypad());
+    if (playerIsDying() || playerIsChangingSize()) {
+        // Everything else stops while Mario changes size or dies, like SMB
+        playerUpdate(0);
+        if (playerDeathFinished()) {
+            loseLife();
+            return;
+        }
+    } else {
+        playerUpdate(joypad());
+        if (playerFellOut()) {
+            loseLife();
+            return;
+        }
+        if (tickClock()) playerDie(); // out of time
 
-    if (tickClock() || playerFellOut()) {
-        loseLife();
-        return;
+        cameraFollow(&mario);
+        enemiesUpdate();
+        blocksUpdate();
+        powerupUpdate();
+        popupsUpdate();
     }
-
-    cameraFollow(&mario);
-    blocksUpdate();
-    flagpoleDraw();
-    playerDraw();
+    drawSprites();
 }

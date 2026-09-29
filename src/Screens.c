@@ -22,21 +22,16 @@ static void clearScreen(void) {
 // pieces right after it, and the font at the top (see TitleMap.h)
 void titleScreen(void) {
     uint8_t logo[TitleLogoTileCount];
-    uint8_t i, saved = CURRENT_BANK;
+    uint8_t i;
 
-    SWITCH_ROM(BANK(TitleMap)); // maps bank: which logo pieces to load
-    for (i = 0; i < TitleLogoTileCount; i++) logo[i] = TitleLogoTiles[i];
-
-    SWITCH_ROM(BANK(SceneryTiles)); // tiles bank
-    set_bkg_data(0, SceneryTilesCount, SceneryTiles);
+    bankedMemcpy(logo, TitleLogoTiles, sizeof(logo), BANK(TitleMap)); // which logo pieces
+    bankedSetBkgData(0, SceneryTilesCount, SceneryTiles, BANK(SceneryTiles));
     for (i = 0; i < TitleLogoTileCount; i++) {
-        set_bkg_data(SceneryTilesCount + i, 1, MiscBackgroundTiles + logo[i] * 16);
+        bankedSetBkgData(SceneryTilesCount + i, 1, MiscBackgroundTiles + logo[i] * 16, BANK(MiscBackgroundTiles));
     }
     fontLoad();
-
-    SWITCH_ROM(BANK(TitleMap)); // tiles are in place: now the layout
-    set_bkg_tiles(0, 0, TitleMapWidth, TitleMapHeight, TitleMap);
-    SWITCH_ROM(saved);
+    // tiles are in place: now the layout
+    bankedSetBkgTiles(0, 0, TitleMapWidth, TitleMapHeight, TitleMap, BANK(TitleMap));
 
     waitpad(J_START | J_A);
 }
@@ -63,8 +58,9 @@ void worldScreen(int8_t world, int8_t level, int8_t lives) {
         text[1] = 0;
     }
     fontPrint(12, 10, text);
-    hide_sprites_range(OAM_MARIO + 4, MAX_HARDWARE_SPRITES); // leftovers from play (flag, coins...)
-    move_metasprite_ex(mario_metasprite, SPR_TILE_MARIO, 0, OAM_MARIO, 56 + SPRITE_OFFSET_X, 76 + SPRITE_OFFSET_Y);
+    // Mario icon in the first 4 hardware sprites; hide leftovers from play
+    move_metasprite_ex(mario_metasprite, SPR_TILE_MARIO, 0, 0, 56 + SPRITE_OFFSET_X, 76 + SPRITE_OFFSET_Y);
+    hide_sprites_range(4, MAX_HARDWARE_SPRITES);
     SHOW_SPRITES;
     DISPLAY_ON;
 
