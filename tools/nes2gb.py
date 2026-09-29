@@ -250,6 +250,7 @@ def main():
               "jumpspring, 16x24 row by row")
     items.add("SPRING2", [t(0xF1), hflip(t(0xF1)), t(0xF1), hflip(t(0xF1)), t(0xFC), t(0xFC)], SPRITE_GRAYS)
     items.add("SPRING3", [t(0xF0), hflip(t(0xF0)), t(0xFC), t(0xFC), t(0xFC), t(0xFC)], SPRITE_GRAYS)
+    items.add("CASTLE_FLAG", [t(0x54), t(0x56), t(0x55), t(0x57)], SPRITE_GRAYS, "star flag raised over the castle, 16x16")
     items.write("assets/sprites")
 
     # ---- Enemies (EnemyGraphicsTable). 16x16 frames are TL, BL, TR, BR;

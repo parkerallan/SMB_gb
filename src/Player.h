@@ -9,7 +9,7 @@ extern struct GameCharacter mario;
 // Load Mario's sprite tiles (small, big and dead)
 void playerInit(void);
 
-// Put small Mario back at the level start
+// Put Mario back at the level start (keeping his size and fire power)
 void playerReset(void);
 
 // Move, jump and fall for one frame based on the joypad state. While Mario is
@@ -45,6 +45,14 @@ uint8_t playerIsInvincible(void);
 void playerDie(void);
 uint8_t playerIsDying(void);
 uint8_t playerDeathFinished(void);
+
+// The level end takes over Mario: holding the flagpole (the climbing frame,
+// not moving), hidden inside the castle, or back to normal
+#define POSE_NORMAL 0
+#define POSE_POLE   1
+#define POSE_HIDDEN 2
+void playerSetPose(uint8_t pose);
+void playerFaceLeft(uint8_t left);
 
 // Stomping an enemy: little hop off it
 void playerBounce(void);

@@ -22,10 +22,11 @@
 #define SPR_TILE_STAR        (SPR_TILE_FLOWER + 4)                       // 4: TL BL TR BR
 #define SPR_TILE_BRICK_PIECE (SPR_TILE_STAR + 4)                         // 1
 #define SPR_TILE_FIREBALL    (SPR_TILE_BRICK_PIECE + 1)                  // 1
-#define SPR_TILE_BIG_FIRE    (SPR_TILE_FIREBALL + 1)                     // 8: fire Mario throwing
+#define SPR_TILE_BIG_FIRE    (SPR_TILE_FIREBALL + 1)                     // 8: fire Mario throwing (Mario climbing at the flagpole)
 #define SPR_TILE_SCORE       ((uint8_t)156)                             // 9: see Popup.c
 #define SPR_TILE_ENEMIES     ((uint8_t)(SPR_TILE_SCORE + 9))             // 28: see Enemies.c
 #define SPR_TILE_EXPLOSION   ((uint8_t)(SPR_TILE_ENEMIES + 28))          // 12: small, medium, large (see Fireball.c)
+#define SPR_TILE_CASTLE_FLAG ((uint8_t)(SPR_TILE_EXPLOSION + 12))        // 4: TL BL TR BR
 
 // Hardware sprite coordinates are offset from the screen by (8, 16)
 #define SPRITE_OFFSET_X 8

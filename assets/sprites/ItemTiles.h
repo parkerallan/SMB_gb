@@ -11,7 +11,7 @@
 
 #include <gbdk/platform.h>
 
-#define ItemTilesCount 68
+#define ItemTilesCount 72
 
 #define ITEMTILES_COIN                 0  // 4 frames x (top, bottom)
 #define ITEMTILES_MUSHROOM             8  // also the 1-up mushroom
@@ -29,6 +29,7 @@
 #define ITEMTILES_SPRING1             50  // jumpspring, 16x24 row by row
 #define ITEMTILES_SPRING2             56
 #define ITEMTILES_SPRING3             62
+#define ITEMTILES_CASTLE_FLAG         68  // star flag raised over the castle, 16x16
 
 // In a switchable ROM bank: switch to BANK(ItemTiles) before reading it
 BANKREF_EXTERN(ItemTiles)

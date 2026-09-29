@@ -27,18 +27,29 @@ static void hudText(uint8_t x, uint8_t y, const char *text) {
 }
 
 static const uint16_t placeValues[] = {10000, 1000, 100, 10, 1};
+static const uint32_t scorePlaceValues[] = {100000, 10000, 1000, 100, 10, 1};
 
-// Write value as exactly `digits` digits (up to 6), zero padded. Each digit
+// Write value as exactly `digits` digits (up to 5), zero padded. Each digit
 // is found by subtracting its place value: the Game Boy has no divide
 // instruction, and dividing by 10 for every digit made score changes drop a frame.
 static void hudNumber(uint8_t x, uint8_t y, uint16_t value, uint8_t digits) {
     uint8_t *dst = hudMap + y * HUD_COLS + x;
     const uint16_t *place;
     uint8_t d;
-    for (; digits > 5; digits--) *dst++ = FONT_DIGIT_TILE(0); // a uint16_t has 5 digits at most
     for (place = placeValues + 5 - digits; digits; digits--, place++) {
         for (d = 0; value >= *place; d++) value -= *place;
         *dst++ = FONT_DIGIT_TILE(d > 9 ? 9 : d); // too big for its digits: show 9s
+    }
+}
+
+// The score's six digits, the same way
+static void hudScore(uint32_t score) {
+    uint8_t *dst = hudMap + HUD_COLS + HUD_SCORE_X;
+    const uint32_t *place;
+    uint8_t d;
+    for (place = scorePlaceValues; place != scorePlaceValues + 6; place++) {
+        for (d = 0; score >= *place; d++) score -= *place;
+        *dst++ = FONT_DIGIT_TILE(d > 9 ? 9 : d);
     }
 }
 
@@ -78,12 +89,12 @@ void hudInit(void) {
     set_interrupts(IE_REG | LCD_IFLAG);
 }
 
-static void hudScoreAndCoins(uint16_t score, uint8_t coins) {
-    hudNumber(HUD_SCORE_X, 1, score, 6);
+static void hudScoreAndCoins(uint32_t score, uint8_t coins) {
+    hudScore(score);
     hudNumber(HUD_COINS_X + 2, 1, coins, 2);
 }
 
-void hudUpdate(uint16_t score, uint8_t coins, int8_t lives, int8_t world, int8_t level, uint16_t time) {
+void hudUpdate(uint32_t score, uint8_t coins, int8_t lives, int8_t world, int8_t level, uint16_t time) {
     hudNumber(HUD_LIVES_X + 1, 0, lives, 1);
     hudScoreAndCoins(score, coins);
     hudNumber(HUD_LEVEL_X, 1, world, 1);
@@ -93,7 +104,7 @@ void hudUpdate(uint16_t score, uint8_t coins, int8_t lives, int8_t world, int8_t
 }
 
 // Redraw only the score and coin count (row 1, up to the world number)
-void hudUpdateScore(uint16_t score, uint8_t coins) {
+void hudUpdateScore(uint32_t score, uint8_t coins) {
     hudScoreAndCoins(score, coins);
     set_win_tiles(0, 1, HUD_LEVEL_X, 1, hudMap + HUD_COLS);
 }

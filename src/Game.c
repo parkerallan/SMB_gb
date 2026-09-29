@@ -22,9 +22,10 @@
 #define DEATH_PAUSE_FRAMES 30
 #define COIN_POINTS 200
 #define COINS_PER_LIFE 100
+#define TIME_BONUS_POINTS 50 // per unit of time left at the end of a level, like SMB
 
 int8_t lives;
-uint16_t score;
+uint32_t score;
 uint8_t coins;
 int8_t world, level;
 
@@ -124,6 +125,25 @@ static void loseLife(void) {
     gameEnterLevel();
 }
 
+uint16_t gameTimeLeft(void) {
+    return timeLeft;
+}
+
+uint8_t gameTimeBonus(void) {
+    if (!timeLeft) return 0;
+    timeLeft--;
+    score += TIME_BONUS_POINTS;
+    hudUpdateTime(timeLeft);
+    hudUpdateScore(score, coins);
+    return 1;
+}
+
+// Only 1-1 exists so far: play it again, keeping score, lives, coins and
+// Mario's power-ups
+static void levelComplete(void) {
+    gameEnterLevel();
+}
+
 // Count the clock down; returns 1 when time runs out
 static uint8_t tickClock(void) {
     if (++timeFrames >= TIME_TICK_FRAMES) {
@@ -142,13 +162,26 @@ void gameUpdate(void) {
             loseLife();
             return;
         }
+    } else if (flagpoleEnding()) {
+        // The level end runs Mario, the time bonus and the castle; everything
+        // else stays put (the clock has stopped)
+        if (flagpoleUpdate()) {
+            levelComplete();
+            return;
+        }
+        cameraFollow(&mario);
+        blocksUpdate();
+        fireballsUpdate();
+        popupsUpdate();
     } else {
         playerUpdate(joypad());
         if (playerFellOut()) {
+            playerDie(); // takes his power-ups away, like any death
             loseLife();
             return;
         }
         if (tickClock()) playerDie(); // out of time
+        flagpoleCheck(); // grabbed the flagpole?
 
         cameraFollow(&mario);
         enemiesUpdate();

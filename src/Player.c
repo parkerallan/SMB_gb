@@ -75,11 +75,17 @@ static uint8_t becomingFire;    // sizeTimer is running for the flower, not a si
 static uint8_t throwTimer;
 static uint8_t lastInput;
 static uint16_t starTimer;
+static uint8_t pose;
 static uint8_t dying;
 static uint8_t deathTimer;
 
 static const metasprite_t* const walkFrames[] = {mario_walk_frame1, mario_walk_frame2, mario_walk_frame3};
 static const uint8_t bigWalkFrames[] = {BIG_WALK1, BIG_WALK2, BIG_WALK3};
+
+// Fire Mario's throwing frame
+static void loadThrowFrame(void) {
+    bankedSetSpriteData(SPR_TILE_BIG_FIRE, 8, BigMarioTiles + BIGMARIOTILES_FIRE * 16, BANK(BigMarioTiles));
+}
 
 void playerInit(void) {
     bankedSetSpriteData(SPR_TILE_MARIO, SPR_SMALL_MARIO_TILES, MarioTiles, BANK(MarioTiles));
@@ -88,29 +94,31 @@ void playerInit(void) {
     bankedSetSpriteData(SPR_TILE_BIG_MARIO + BIG_STAND, BIGMARIOTILES_SWIM1, BigMarioTiles, BANK(BigMarioTiles));
     bankedSetSpriteData(SPR_TILE_BIG_MARIO + BIG_CROUCH, 8, BigMarioTiles + BIGMARIOTILES_CROUCH * 16,
                         BANK(BigMarioTiles));
-    bankedSetSpriteData(SPR_TILE_BIG_FIRE, 8, BigMarioTiles + BIGMARIOTILES_FIRE * 16, BANK(BigMarioTiles));
+    loadThrowFrame();
 }
 
+// Mario starts each level with the power-ups he finished the last one with
+// (dying already took them away)
 void playerReset(void) {
+    loadThrowFrame(); // the level end borrows its tiles for the climbing frame
     mario.x = MARIO_START_X;
-    mario.y = MARIO_START_Y;
     mario.width = 16;
-    mario.height = SMALL_HEIGHT;
+    mario.height = big ? BIG_HEIGHT : SMALL_HEIGHT;
+    mario.y = MARIO_START_Y + SMALL_HEIGHT - mario.height;
     velocityY = 0;
     subX = 0;
     subY = 0;
     onGround = 0;
     crouching = 0;
     facingLeft = 0;
-    big = 0;
     sizeTimer = 0;
     invincibleTimer = 0;
-    fire = 0;
     becomingFire = 0;
     throwTimer = 0;
     lastInput = 0;
     starTimer = 0;
     dying = 0;
+    pose = POSE_NORMAL;
 }
 
 void playerGrow(void) {
@@ -119,6 +127,25 @@ void playerGrow(void) {
     mario.y -= BIG_HEIGHT - SMALL_HEIGHT; // grow upward, feet stay put
     mario.height = BIG_HEIGHT;
     sizeTimer = CHANGE_SIZE_FRAMES;
+}
+
+void playerSetPose(uint8_t newPose) {
+    pose = newPose;
+    if (pose == POSE_POLE) {
+        // the climbing frame goes where the throwing frame was (it's not needed
+        // at the flagpole); playerReset puts the throwing frame back
+        if (big) bankedSetSpriteData(SPR_TILE_BIG_FIRE, 8, BigMarioTiles + BIGMARIOTILES_CLIMB1 * 16, BANK(BigMarioTiles));
+        else     bankedSetSpriteData(SPR_TILE_BIG_FIRE, 4, MarioTiles + MARIOTILES_CLIMB1 * 16, BANK(MarioTiles));
+        velocityY = 0;
+        subX = subY = 0;
+        starTimer = 0;
+        invincibleTimer = 0;
+        throwTimer = 0;
+    }
+}
+
+void playerFaceLeft(uint8_t left) {
+    facingLeft = left;
 }
 
 void playerFire(void) {
@@ -342,6 +369,12 @@ void playerDraw(void) {
     uint8_t sy = mario.y - cameraY + SPRITE_OFFSET_Y;
 
     choosePalette();
+    if (pose == POSE_HIDDEN) return;
+    if (pose == POSE_POLE) {
+        if (big) drawBig(SPR_TILE_BIG_FIRE, sx, sy);
+        else     drawSmall(mario_metasprite, SPR_TILE_BIG_FIRE, sx, sy);
+        return;
+    }
     if (dying) {
         if (mario.y < cameraY + 144) drawSmall(mario_metasprite, SPR_TILE_MARIO_DEAD, sx, sy);
         return;

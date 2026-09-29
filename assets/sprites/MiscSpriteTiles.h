@@ -11,7 +11,7 @@
 
 #include <gbdk/platform.h>
 
-#define MiscSpriteTilesCount 20
+#define MiscSpriteTilesCount 16
 
 #define MISCSPRITETILES_FIRST          0
 
