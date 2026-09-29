@@ -2,6 +2,7 @@
 #include "Camera.h"
 #include "Level.h"
 #include "Hud.h"
+#include "Sprites.h"
 
 #define SCREEN_WIDTH 160
 #define SCREEN_HEIGHT 144
@@ -39,6 +40,17 @@ void cameraFollow(const struct GameCharacter *target) {
     }
     if (cameraY < 0) cameraY = 0;
     if (cameraY > CAMERA_MAX_Y) cameraY = CAMERA_MAX_Y;
+}
+
+void cameraPlaceSprite(uint8_t oam, int16_t x, int16_t y) {
+    int16_t sx = x - cameraX + SPRITE_OFFSET_X;
+    int16_t sy = y - cameraY + SPRITE_OFFSET_Y;
+    if (sx <= 0 || sx >= SCREEN_WIDTH + SPRITE_OFFSET_X || sy < HUD_PIXEL_HEIGHT + SPRITE_OFFSET_Y ||
+        sy >= SCREEN_HEIGHT + SPRITE_OFFSET_Y) {
+        move_sprite(oam, 0, 0);
+    } else {
+        move_sprite(oam, (uint8_t)sx, (uint8_t)sy);
+    }
 }
 
 void cameraApply(void) {

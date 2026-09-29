@@ -5,6 +5,8 @@
 #include "Level.h"
 #include "Hud.h"
 #include "Screens.h"
+#include "Blocks.h"
+#include "Flagpole.h"
 #include "Util.h"
 
 #define START_LIVES 4
@@ -13,21 +15,33 @@
 #define TIME_LIMIT 400
 #define TIME_TICK_FRAMES 60
 #define DEATH_PAUSE_FRAMES 30
+#define COIN_POINTS 200
+#define COINS_PER_LIFE 100
 
 int8_t lives;
 uint16_t score;
+uint8_t coins;
 int8_t world, level;
 
 static uint16_t timeLeft;
 static uint8_t timeFrames;
 
 static void refreshHud(void) {
-    hudUpdate(score, lives, world, level, timeLeft);
+    hudUpdate(score, coins, lives, world, level, timeLeft);
+}
+
+void gameInit(void) {
+    hudInit();
+    levelInit();
+    playerInit();
+    blocksInit();
+    flagpoleInit();
 }
 
 void gameNew(void) {
     lives = START_LIVES;
     score = 0;
+    coins = 0;
     world = 1;
     level = 1;
 }
@@ -37,7 +51,9 @@ static void startLevel(void) {
     DISPLAY_OFF;
     playerReset();
     cameraReset();
+    blocksReset(); // SMB refills blocks when you die; coins and score carry over
     levelLoad(cameraX);
+    flagpoleReset();
     timeFrames = 0;
     playerDraw();
     SHOW_SPRITES;
@@ -49,6 +65,17 @@ void gameEnterLevel(void) {
     refreshHud();
     worldScreen(world, level, lives);
     startLevel();
+}
+
+void gameCollectCoin(void) {
+    score += COIN_POINTS;
+    if (++coins >= COINS_PER_LIFE) {
+        coins = 0;
+        lives++;
+        refreshHud();
+    } else {
+        hudUpdateScore(score, coins);
+    }
 }
 
 static void loseLife(void) {
@@ -81,5 +108,7 @@ void gameUpdate(void) {
     }
 
     cameraFollow(&mario);
+    blocksUpdate();
+    flagpoleDraw();
     playerDraw();
 }

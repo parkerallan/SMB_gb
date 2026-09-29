@@ -3,8 +3,10 @@
 #include "Player.h"
 #include "Level.h"
 #include "Camera.h"
-#include "Mario.h"
+#include "Blocks.h"
+#include "MarioTiles.h"
 #include "Metasprites.h"
+#include "Sprites.h"
 
 // Physics runs every frame in 1/16 pixel units (4-bit sub-pixels)
 #define GRAVITY 3
@@ -12,12 +14,8 @@
 #define MAX_FALL_SPEED 64
 #define WALK_SPEED 24
 #define WALK_ANIM_FRAMES 6
-#define MARIO_TILE_COUNT 20
 #define MARIO_START_X 40
 #define MARIO_START_Y 192
-// Hardware sprite coordinates are offset from the screen by (8, 16)
-#define SPRITE_OFFSET_X 8
-#define SPRITE_OFFSET_Y 16
 
 struct GameCharacter mario;
 
@@ -31,7 +29,10 @@ static uint8_t walkTimer, walkFrame;
 static const metasprite_t* const walkFrames[] = {mario_walk_frame1, mario_walk_frame2, mario_walk_frame3};
 
 void playerInit(void) {
-    set_sprite_data(0, MARIO_TILE_COUNT, MarioTiles);
+    uint8_t saved = CURRENT_BANK;
+    SWITCH_ROM(BANK(MarioTiles));
+    set_sprite_data(SPR_TILE_MARIO, MarioTilesCount, MarioTiles);
+    SWITCH_ROM(saved);
 }
 
 void playerReset(void) {
@@ -79,6 +80,16 @@ static void moveX(int8_t dx) {
     }
 }
 
+// Bumped a solid row from below: hit the block over Mario's center, like SMB,
+// or the one under whichever edge is touching
+static void hitBlockAbove(int16_t ty, int16_t left, int16_t right) {
+    int16_t tx = (left + (mario.width >> 1)) >> 3;
+    if (!levelTileSolid(tx, ty)) {
+        tx = levelTileSolid(left >> 3, ty) ? (left >> 3) : (right >> 3);
+    }
+    blocksHit(tx, ty);
+}
+
 static void moveY(int8_t dy) {
     int16_t left = mario.x;
     int16_t right = left + mario.width - 1;
@@ -96,6 +107,7 @@ static void moveY(int8_t dy) {
     } else if (dy < 0) {
         edge = mario.y + dy;
         if (levelRowSolid(edge >> 3, left, right)) {
+            hitBlockAbove(edge >> 3, left, right);
             mario.y = ((edge >> 3) + 1) << 3;            // bumped head
             velocityY = 0;
             subY = 0;
@@ -158,8 +170,8 @@ void playerDraw(void) {
     else if (moving) frame = walkFrames[walkFrame];
     else             frame = mario_metasprite;
 
-    if (facingLeft) move_metasprite_flipx(frame, 0, 0, 0, sx + mario.width, sy);
-    else            move_metasprite_ex(frame, 0, 0, 0, sx, sy);
+    if (facingLeft) move_metasprite_flipx(frame, SPR_TILE_MARIO, 0, OAM_MARIO, sx + mario.width, sy);
+    else            move_metasprite_ex(frame, SPR_TILE_MARIO, 0, OAM_MARIO, sx, sy);
 }
 
 uint8_t playerFellOut(void) {

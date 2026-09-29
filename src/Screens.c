@@ -3,16 +3,14 @@
 #include "Screens.h"
 #include "Font.h"
 #include "Metasprites.h"
-#include "WorldTiles.h"
 #include "TitleMap.h"
+#include "SceneryTiles.h"
+#include "MiscBackgroundTiles.h"
+#include "Sprites.h"
 #include "Util.h"
 
-#define WORLD_TILE_COUNT 123
 #define WORLD_SCREEN_FRAMES 150
 #define GAME_OVER_FRAMES 180
-// Hardware sprite coordinates are offset from the screen by (8, 16)
-#define SPRITE_OFFSET_X 8
-#define SPRITE_OFFSET_Y 16
 
 // Blank the visible part of the background (the HUD window stays on top)
 static void clearScreen(void) {
@@ -20,9 +18,26 @@ static void clearScreen(void) {
     fill_bkg_rect(0, 0, 20, 18, FONT_BLANK_TILE);
 }
 
+// The title is drawn with the game's sheets: scenery from tile 0, the logo
+// pieces right after it, and the font at the top (see TitleMap.h)
 void titleScreen(void) {
-    set_bkg_data(0, WORLD_TILE_COUNT, WorldTiles);
-    set_bkg_tiles(0, 0, 20, 18, TitleMap);
+    uint8_t logo[TitleLogoTileCount];
+    uint8_t i, saved = CURRENT_BANK;
+
+    SWITCH_ROM(BANK(TitleMap)); // maps bank: which logo pieces to load
+    for (i = 0; i < TitleLogoTileCount; i++) logo[i] = TitleLogoTiles[i];
+
+    SWITCH_ROM(BANK(SceneryTiles)); // tiles bank
+    set_bkg_data(0, SceneryTilesCount, SceneryTiles);
+    for (i = 0; i < TitleLogoTileCount; i++) {
+        set_bkg_data(SceneryTilesCount + i, 1, MiscBackgroundTiles + logo[i] * 16);
+    }
+    fontLoad();
+
+    SWITCH_ROM(BANK(TitleMap)); // tiles are in place: now the layout
+    set_bkg_tiles(0, 0, TitleMapWidth, TitleMapHeight, TitleMap);
+    SWITCH_ROM(saved);
+
     waitpad(J_START | J_A);
 }
 
@@ -48,7 +63,8 @@ void worldScreen(int8_t world, int8_t level, int8_t lives) {
         text[1] = 0;
     }
     fontPrint(12, 10, text);
-    move_metasprite_ex(mario_metasprite, 0, 0, 0, 56 + SPRITE_OFFSET_X, 76 + SPRITE_OFFSET_Y);
+    hide_sprites_range(OAM_MARIO + 4, MAX_HARDWARE_SPRITES); // leftovers from play (flag, coins...)
+    move_metasprite_ex(mario_metasprite, SPR_TILE_MARIO, 0, OAM_MARIO, 56 + SPRITE_OFFSET_X, 76 + SPRITE_OFFSET_Y);
     SHOW_SPRITES;
     DISPLAY_ON;
 

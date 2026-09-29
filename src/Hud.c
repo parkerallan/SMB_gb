@@ -5,15 +5,17 @@
 #define HUD_ROWS 2
 #define HUD_COLS 20
 
-// Layout, modeled on SMB's top bar (labels on the first row, values below):
-//   " MARIO x4 WORLD TIME"
-//   " 000000    1-1   400"
-#define HUD_NAME_X   1
-#define HUD_LIVES_X  7
+// Layout, modeled on SMB's top bar (labels on the first row, values below;
+// '@' is the coin icon):
+//   "MARIO x4  WORLD TIME"
+//   "000000 @x00 1-1  400"
+#define HUD_NAME_X   0
+#define HUD_LIVES_X  6
 #define HUD_WORLD_X  10
 #define HUD_TIME_X   16
-#define HUD_SCORE_X  1
-#define HUD_LEVEL_X  11
+#define HUD_SCORE_X  0
+#define HUD_COINS_X  7
+#define HUD_LEVEL_X  12
 #define HUD_CLOCK_X  17
 
 static uint8_t hudMap[HUD_COLS * HUD_ROWS];
@@ -66,15 +68,27 @@ void hudInit(void) {
     set_interrupts(IE_REG | LCD_IFLAG);
 }
 
-void hudUpdate(uint16_t score, int8_t lives, int8_t world, int8_t level, uint16_t time) {
+static void hudScoreAndCoins(uint16_t score, uint8_t coins) {
+    hudNumber(HUD_SCORE_X, 1, score, 6);
+    hudText(HUD_COINS_X, 1, "@x");
+    hudNumber(HUD_COINS_X + 2, 1, coins, 2);
+}
+
+void hudUpdate(uint16_t score, uint8_t coins, int8_t lives, int8_t world, int8_t level, uint16_t time) {
     hudText(HUD_LIVES_X, 0, "x");
     hudNumber(HUD_LIVES_X + 1, 0, lives, 1);
-    hudNumber(HUD_SCORE_X, 1, score, 6);
+    hudScoreAndCoins(score, coins);
     hudNumber(HUD_LEVEL_X, 1, world, 1);
     hudText(HUD_LEVEL_X + 1, 1, "-");
     hudNumber(HUD_LEVEL_X + 2, 1, level, 1);
     hudNumber(HUD_CLOCK_X, 1, time, 3);
     set_win_tiles(0, 0, HUD_COLS, HUD_ROWS, hudMap);
+}
+
+// Redraw only the score and coin count (row 1, up to the world number)
+void hudUpdateScore(uint16_t score, uint8_t coins) {
+    hudScoreAndCoins(score, coins);
+    set_win_tiles(0, 1, HUD_LEVEL_X, 1, hudMap + HUD_COLS);
 }
 
 // Redraw only the clock digits; cheaper than a full hudUpdate() so the

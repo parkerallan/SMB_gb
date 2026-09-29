@@ -2,7 +2,8 @@ GBDK_PATH = D:/Emulation/gbdk
 EMULATOR = D:/Emulation/GBA/mGBA/mGBA.exe
 
 CC = $(GBDK_PATH)/bin/lcc
-CFLAGS = -Wa-l -Wl-m -Wl-j -DUSE_SFR_FOR_REG
+# MBC1 cartridge, 4 ROM banks (64KB): code in bank 0, maps in bank 1, tiles in bank 2
+CFLAGS = -Wa-l -Wl-m -Wl-j -DUSE_SFR_FOR_REG -Wl-yt1 -Wl-yo4
 INCLUDES = -Isrc -Iassets/sprites -Iassets/tiles -Iassets/maps
 
 SRC = $(wildcard src/*.c assets/*/*.c)
@@ -15,6 +16,7 @@ all: $(OUTPUT)
 $(OUTPUT): $(SRC) $(HEADERS)
 	mkdir -p build
 	$(CC) $(CFLAGS) $(INCLUDES) -o $(OUTPUT) $(SRC)
+	$(GBDK_PATH)/bin/romusage build/main.map -q -R
 	rm -f *.lst *.o *.ihx *.cdb *.adb *.asm *.sym
 
 run: $(OUTPUT)

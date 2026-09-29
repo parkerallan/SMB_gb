@@ -2,11 +2,13 @@
 #define FONT_H
 
 #include <stdint.h>
+#include "FontTiles.h"
 
-// Super Mario Bros style font shared by the HUD and the text screens.
-// Tiles 128+ live at 0x8800, clear of the level tiles (0-122) and Mario's
-// sprite tiles (0x8000-0x813F).
-#define FONT_FIRST_TILE 128
+// The Super Mario Bros. font (assets/tiles/FontTiles), shared by the HUD and
+// the text screens. Letters A-Z, digits, '-', '!', 'x' (times sign), '@' (coin).
+// It sits at the very end of the background tiles (up to 255), above the
+// scenery tiles the level loads from 0 up.
+#define FONT_FIRST_TILE ((uint8_t)(256 - FontTilesCount))
 #define FONT_BLANK_TILE FONT_FIRST_TILE
 
 // Copy the font into background tile memory
