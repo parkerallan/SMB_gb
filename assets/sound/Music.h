@@ -25,7 +25,8 @@
 #define MUSIC_DEATH              7
 #define MUSIC_GAME_OVER          8
 #define MUSIC_LEVEL_CLEAR        9
-#define MusicSongCount 10
+#define MUSIC_PIPE_INTRO         10
+#define MusicSongCount 11
 
 #define MUSIC_CHANNELS 4
 typedef struct { const uint8_t *channel[MUSIC_CHANNELS]; } MusicPart;

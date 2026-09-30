@@ -4,7 +4,8 @@
 #include <stdint.h>
 #include <gb/gb.h>
 
-// Goombas and Koopa Troopas, placed from the level's enemy list (Level1_1Enemies)
+// Goombas, Koopa Troopas and Piranha Plants, placed from the level's enemy list
+// (LevelEnemies), which also has its lifts (see Lifts.h)
 // and brought to life as they scroll into view
 
 // Load their sprite tiles

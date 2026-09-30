@@ -4,11 +4,17 @@
 #include <stdint.h>
 #include "Level1_1.h"
 #include "Level1_1Bonus.h"
+#include "Level1_2Intro.h"
+#include "Level1_2.h"
+#include "Level1_2Bonus.h"
 #include "SceneryTiles.h"
 
-// The areas Mario can be in: World 1-1 and its underground coin room
+// The areas Mario can be in: each level's, their coin rooms, and 1-2's intro
 #define AREA_1_1       0
 #define AREA_1_1_BONUS 1
+#define AREA_1_2_INTRO 2
+#define AREA_1_2       3
+#define AREA_1_2_BONUS 4
 
 // The map is a grid of 16x16 blocks (SCENERY_* numbers); positions below are
 // in 8x8 tiles or pixels unless they say "block". Every area is 15 blocks
@@ -48,8 +54,15 @@ uint8_t levelBlockAt(int16_t bx, int16_t by);
 // Change a block (e.g. a hit ? block becomes USED_BLOCK) and redraw it if on screen
 void levelSetBlock(int16_t bx, int16_t by, uint8_t block);
 
-// The 4 background tiles that draw a block: TL, TR, BL, BR
+// The 4 background tiles that draw a block: TL, TR, BL, BR. (Before the first
+// levelLoad these are SceneryTiles' own tile numbers; after it, where the
+// area's tiles are in video memory: see levelLoad.)
 const uint8_t *levelBlockTiles(uint8_t block);
+
+// Text drawn over the area's map in 8x8 tiles (the warp zone's), from
+// (tx, ty) rightwards, in a light color that shows up underground. Call after
+// levelLoad; it lasts until the next one.
+void levelAddText(int16_t tx, uint8_t ty, const char *text);
 
 // Change the tile shown at (tx, ty) if that column is currently in VRAM
 void levelSetTile(int16_t tx, int16_t ty, uint8_t tile);

@@ -7,6 +7,7 @@
 #include "Camera.h"
 #include "Blocks.h"
 #include "Fireball.h"
+#include "Lifts.h"
 #include "MarioTiles.h"
 #include "BigMarioTiles.h"
 #include "Metasprites.h"
@@ -326,6 +327,7 @@ static int8_t step(uint8_t *sub, int16_t speed) {
 
 static void applyGravity(uint8_t input) {
     int8_t dy;
+    int16_t feetBefore = mario.y + mario.height;
 
     // Move first, then gravity changes the speed, like SMB (the other way
     // round, a full jump falls short of 1-1's 4-block stairs)
@@ -343,6 +345,8 @@ static void applyGravity(uint8_t input) {
     }
 
     onGround = velocityY >= 0 && physicsOnGround(&mario);
+    // or on a lift (only while falling or standing on one, not jumping up)
+    if (liftCount && liftsLand((onGround || velocityY < 0) ? LIFTS_NOT_LANDING : feetBefore)) onGround = 1;
     if (onGround) {
         velocityY = 0;
         subY = 0;

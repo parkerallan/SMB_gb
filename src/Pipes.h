@@ -4,9 +4,10 @@
 #include <stdint.h>
 #include <gb/gb.h>
 
-// Pipes Mario can go through, like SMB's 1-1: Down on the pipe that leads to
-// the underground coin room, and Right into the room's sideways pipe, which
-// brings him back up out of a pipe near the end of 1-1
+// Pipes Mario can go through, like SMB's: Down on a pipe that leads somewhere
+// (the coin rooms), Right into a sideways pipe (out of a coin room, into 1-2
+// from its intro, and 1-2's way out), rising out of another pipe or dropping
+// in from above at the other end
 
 // Nobody in a pipe (level start)
 void pipesReset(void) BANKED;

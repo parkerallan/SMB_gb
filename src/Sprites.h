@@ -6,8 +6,9 @@
 #include "MarioTiles.h"
 
 // Where each part of the game keeps its sprite tiles in video memory. Tiles
-// 128-155 are shared with the level's scenery tiles and 215-255 with the font,
-// so sprites use 0-127 and 156-214.
+// 128-255 are shared with the background: the font is at 215-255, and an area
+// loads only the scenery tiles it uses, below 128 (see levelLoad), so sprites
+// use 0-214.
 #define SPR_SMALL_MARIO_TILES MARIOTILES_SKID   // small Mario's stand, walk and jump frames
 #define SPR_TILE_MARIO       0                                          // small Mario
 #define SPR_TILE_MARIO_DEAD  (SPR_TILE_MARIO + SPR_SMALL_MARIO_TILES)    // 4: TL BL TR BR
@@ -22,6 +23,8 @@
 #define SPR_TILE_STAR        (SPR_TILE_FLOWER + 4)                       // 4: TL BL TR BR
 #define SPR_TILE_BIG_FIRE    (SPR_TILE_STAR + 4)                         // 8: fire Mario throwing (Mario climbing at the flagpole)
 #define SPR_TILE_SMALL_SKID  (SPR_TILE_BIG_FIRE + 8)                     // 4: small Mario skidding, TL BL TR BR
+#define SPR_TILE_PIRANHA     ((uint8_t)128)                             // 12: 2 frames, 16x24 row by row
+#define SPR_TILE_LIFT        ((uint8_t)(SPR_TILE_PIRANHA + 12))          // 1: a lift's segment
 #define SPR_TILE_SCORE       ((uint8_t)156)                             // 9: see Popup.c
 #define SPR_TILE_ENEMIES     ((uint8_t)(SPR_TILE_SCORE + 9))             // 28: see Enemies.c
 #define SPR_TILE_EXPLOSION   ((uint8_t)(SPR_TILE_ENEMIES + 28))          // 12: small, medium, large (see Fireball.c)
@@ -49,6 +52,10 @@ void spriteDraw(uint8_t tile, uint8_t props, int16_t x, int16_t y);
 // when off screen, under the HUD, or out of hardware sprites.
 void spriteDraw16(uint8_t first, uint8_t props, int16_t x, int16_t y);
 void spriteDrawKoopa(uint8_t first, uint8_t props, int16_t x, int16_t y);
+// A 16x24 frame of 6 tiles row by row (a Piranha Plant's)
+void spriteDrawTall(uint8_t first, uint8_t props, int16_t x, int16_t y);
+// `count` copies of one tile side by side (a lift)
+void spriteDrawRow(uint8_t tile, uint8_t count, uint8_t props, int16_t x, int16_t y);
 
 // For metasprites: draw at hardware sprite spritesNext(), then report how many were used
 uint8_t spritesNext(void);

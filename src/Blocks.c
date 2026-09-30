@@ -175,10 +175,17 @@ static void breakBrick(int16_t tx, uint8_t ty) {
 }
 
 void blocksCollectCoins(void) BANKED {
+    static int16_t lastLeft, lastRight, lastTop, lastBottom;
     int16_t bx, by;
     int16_t left = mario.x >> 4, right = (mario.x + mario.width - 1) >> 4;
-    int16_t bottom = (mario.y + mario.height - 1) >> 4;
-    for (by = mario.y >> 4; by <= bottom; by++) {
+    int16_t top = mario.y >> 4, bottom = (mario.y + mario.height - 1) >> 4;
+    // only when he touches different blocks: most frames he doesn't
+    if (left == lastLeft && right == lastRight && top == lastTop && bottom == lastBottom) return;
+    lastLeft = left;
+    lastRight = right;
+    lastTop = top;
+    lastBottom = bottom;
+    for (by = top; by <= bottom; by++) {
         for (bx = left; bx <= right; bx++) {
             if (levelBlockAt(bx, by) == SCENERY_COIN) {
                 levelSetBlock(bx, by, SCENERY_BLANK);

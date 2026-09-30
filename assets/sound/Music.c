@@ -145,6 +145,7 @@ static const uint8_t songParts6[] = {24};
 static const uint8_t songParts7[] = {25};
 static const uint8_t songParts8[] = {26};
 static const uint8_t songParts9[] = {27};
+static const uint8_t songParts10[] = {0};
 
 const MusicSong MusicSongs[] = {
   {songParts0, 33, 1, 0xB2}, // GROUND
@@ -157,6 +158,7 @@ const MusicSong MusicSongs[] = {
   {songParts7, 1, MUSIC_NO_LOOP, 0xA5}, // DEATH
   {songParts8, 1, MUSIC_NO_LOOP, 0xA5}, // GAME_OVER
   {songParts9, 1, MUSIC_NO_LOOP, 0xA5}, // LEVEL_CLEAR
+  {songParts10, 1, MUSIC_NO_LOOP, 0xB2}, // PIPE_INTRO
 };
 
 const uint16_t MusicFreqs[] = {

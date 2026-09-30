@@ -10,7 +10,8 @@
 #include "Level.h"
 #include "Game.h"
 #include "Popup.h"
-#include "Level1_1Enemies.h"
+#include "LevelEnemies.h"
+#include "Lifts.h"
 #include "EnemyTiles.h"
 #include "Sprites.h"
 #include "Sound.h"
@@ -33,6 +34,12 @@
 #define FIRE_POINTS_GOOMBA 100 // fireball kills, like SMB
 #define FIRE_POINTS_KOOPA 200
 #define SHELL_CHAIN_START 3  // shell kills start at 500
+// Piranha Plants: rise out of their pipe, wait, sink back in, wait. They stay
+// in while Mario is close to the pipe, like SMB's.
+#define PLANT_RISE 24        // pixels, at half a pixel a frame
+#define PLANT_WAIT_FRAMES 60 // up, and down
+#define PLANT_SHY_DISTANCE 24 // doesn't come out while Mario's this close (pixels, center to center)
+#define MAX_STUCK_BLOCKS 6   // an enemy that starts inside the ground is pushed up out of it
 
 // Sprite tiles, loaded from EnemyTiles in this order
 #define TILE_GOOMBA      ((uint8_t)(SPR_TILE_ENEMIES + 0))  // 16x16: TL BL TR BR
@@ -42,15 +49,21 @@
 #define TILE_SHELL       ((uint8_t)(SPR_TILE_ENEMIES + 20)) // 16x16, stored upside down
 #define TILE_SHELL_LEGS  ((uint8_t)(SPR_TILE_ENEMIES + 24)) // 16x16, stored upside down
 #define ENEMY_TILE_COUNT 28
+#define TILE_PIRANHA1    SPR_TILE_PIRANHA                     // 16x24: 6 tiles row by row
+#define TILE_PIRANHA2    ((uint8_t)(SPR_TILE_PIRANHA + 6))
 
-enum { NONE, WALKING, SQUASHED, KNOCKED, SHELL, SHELL_MOVING };
+// (Everything from SHELL on can touch things, and WALKING; see CAN_COLLIDE.)
+// A Piranha Plant is PLANT while out of its pipe, PLANT_HIDDEN while inside.
+enum { NONE, WALKING, SQUASHED, KNOCKED, PLANT_HIDDEN, SHELL, SHELL_MOVING, PLANT };
+// A plant's phases (in subX, which plants don't need for walking)
+enum { PLANT_DOWN, PLANT_RISING, PLANT_UP, PLANT_SINKING };
 
 typedef struct {
-    struct GameCharacter body; // 16x16; a Koopa's head sticks up 8 pixels above it
-    uint8_t kind;              // ENEMY_GOOMBA or ENEMY_KOOPA
+    struct GameCharacter body; // 16x16; a Koopa's head sticks up 8 pixels above it, a plant is 24 tall
+    uint8_t kind;              // ENEMY_*
     uint8_t state;
     int16_t speed;             // sign is the direction
-    int16_t velocityY;
+    int16_t velocityY;         // (a plant's: the y it hides at, inside its pipe)
     uint8_t subX, subY;
     uint16_t timer;            // frames in the current state
     uint8_t anim;              // walk animation counter
@@ -74,12 +87,17 @@ static uint8_t frameParity; // alternates each frame: see enemiesUpdate
 // Loops walk the array with a pointer: indexing an 18-byte struct array costs a
 // multiply, which the Game Boy has to do in software
 
-// Starting spots, copied from ROM at level start
-static int16_t spawnX[Level1_1EnemyCount];
-static uint8_t spawnY[Level1_1EnemyCount];
-static uint8_t spawnKind[Level1_1EnemyCount];
-static uint8_t spawned[Level1_1EnemyCount];
-static uint8_t spawnCount; // entries in the current area's list (the coin room has none)
+// Starting spots, copied from ROM at level start (sized for the longest list)
+#if Level1_1EnemiesCount > Level1_2EnemiesCount
+#define MAX_SPAWNS Level1_1EnemiesCount
+#else
+#define MAX_SPAWNS Level1_2EnemiesCount
+#endif
+static int16_t spawnX[MAX_SPAWNS];
+static uint8_t spawnY[MAX_SPAWNS];
+static uint8_t spawnKind[MAX_SPAWNS];
+static uint8_t spawned[MAX_SPAWNS];
+static uint8_t spawnCount; // entries in the current area's list (coin rooms have none)
 
 static uint8_t stompChain; // stomps since Mario last touched the ground
 static uint8_t starChain;  // enemies knocked out by the current star
@@ -97,21 +115,38 @@ void enemiesInit(void) BANKED {
     bankedSetSpriteData(TILE_KOOPA2, 6, EnemyTiles + ENEMYTILES_KOOPA2 * 16, bank);
     bankedSetSpriteData(TILE_SHELL, 4, EnemyTiles + ENEMYTILES_SHELL1 * 16, bank);
     bankedSetSpriteData(TILE_SHELL_LEGS, 4, EnemyTiles + ENEMYTILES_SHELL2 * 16, bank);
+    bankedSetSpriteData(TILE_PIRANHA1, 6, EnemyTiles + ENEMYTILES_PIRANHA1 * 16, bank);
+    bankedSetSpriteData(TILE_PIRANHA2, 6, EnemyTiles + ENEMYTILES_PIRANHA2 * 16, bank);
 }
 
 void enemiesReset(void) BANKED {
-    uint8_t list[Level1_1EnemyCount * 4];
+    uint8_t list[MAX_SPAWNS * 4];
     const uint8_t *src = list;
     uint8_t i;
     Enemy *e;
 
-    spawnCount = (levelArea == AREA_1_1) ? Level1_1EnemyCount : 0;
-    bankedMemcpy(list, Level1_1Enemies, sizeof(list), BANK(Level1_1Enemies));
+    liftsReset();
+    if (levelArea == AREA_1_1) {
+        spawnCount = Level1_1EnemiesCount;
+        src = Level1_1Enemies;
+    } else if (levelArea == AREA_1_2) {
+        spawnCount = Level1_2EnemiesCount;
+        src = Level1_2Enemies;
+    } else {
+        spawnCount = 0;
+    }
+    bankedMemcpy(list, src, spawnCount * 4, BANK(LevelEnemies));
+    src = list;
     for (i = 0; i < spawnCount; i++, src += 4) {
         spawnX[i] = src[0] | (src[1] << 8);
         spawnY[i] = src[2];
         spawnKind[i] = src[3];
         spawned[i] = 0;
+        // lifts aren't enemies here: they're all there from the start
+        if (spawnKind[i] == ENEMY_LIFT_UP || spawnKind[i] == ENEMY_LIFT_DOWN) {
+            liftsAdd(spawnX[i], spawnY[i], spawnKind[i] == ENEMY_LIFT_UP);
+            spawned[i] = 1;
+        }
     }
 
     for (e = enemies; e != ENEMIES_END; e++) e->state = NONE;
@@ -127,7 +162,7 @@ static void remember(uint8_t slot, const Enemy *e) {
 
 static void spawn(uint8_t i) {
     Enemy *e = enemies;
-    uint8_t slot;
+    uint8_t slot, n;
     for (slot = 0; slot < MAX_ENEMIES; slot++, e++) {
         if (e->state == NONE) break;
     }
@@ -145,6 +180,22 @@ static void spawn(uint8_t i) {
     e->timer = 0;
     e->kickGrace = 0;
     e->grounded = 0;
+    if (e->kind == ENEMY_PIRANHA) {
+        // hidden in its pipe; spawnY is the top of the pipe
+        e->body.height = 24;
+        e->state = PLANT_HIDDEN;
+        e->velocityY = e->body.y;
+        e->subX = PLANT_DOWN;
+        e->speed = 0;
+        e->grounded = 1;
+    } else {
+        // SMB puts a few enemies inside solid ground; push them up out of it
+        // (the red Koopa by 1-2's exit pipe starts in the floor under it)
+        for (n = 0; n < MAX_STUCK_BLOCKS &&
+                    levelRowSolid((e->body.y + 15) >> 3, e->body.x, e->body.x + 15); n++) {
+            e->body.y -= 16;
+        }
+    }
     remember(slot, e);
 }
 
@@ -172,6 +223,10 @@ static void award(uint8_t *chain, int16_t x, int16_t y) {
 
 static void knockOut(Enemy *e) {
     sfxPlay(SFX_KICK);
+    if (e->kind == ENEMY_PIRANHA) {
+        e->state = NONE; // just gone, like SMB's
+        return;
+    }
     e->state = KNOCKED;
     e->velocityY = KNOCK_JUMP;
     e->subY = 0;
@@ -202,7 +257,9 @@ static void walk(Enemy *e, uint8_t frames) {
     // of the 16-wide body crosses one, there's nothing new to bump into or fall off
     left = (uint8_t)e->body.x;
     newLeft = left + dx;
-    if (!((left ^ newLeft) & 0xF0) && !(((uint8_t)(left + 15) ^ (uint8_t)(newLeft + 15)) & 0xF0)) {
+    // (a red Koopa also looks for the ledge under its middle)
+    if (!((left ^ newLeft) & 0xF0) && !(((uint8_t)(left + 15) ^ (uint8_t)(newLeft + 15)) & 0xF0) &&
+        (e->kind != ENEMY_RED_KOOPA || !(((uint8_t)(left + 8) ^ (uint8_t)(newLeft + 8)) & 0xF0))) {
         e->body.x += dx;
         return;
     }
@@ -210,7 +267,52 @@ static void walk(Enemy *e, uint8_t frames) {
         e->speed = -e->speed; // turn around at walls
         e->subX = 0;
     }
+    if (e->grounded && e->kind == ENEMY_RED_KOOPA && e->state == WALKING &&
+        !levelRowSolid((e->body.y + 16) >> 3, e->body.x + 8, e->body.x + 8)) {
+        // a red Koopa turns round rather than walk off a ledge
+        e->body.x -= dx;
+        e->speed = -e->speed;
+        e->subX = 0;
+        return;
+    }
     if (e->grounded && !physicsOnGround(&e->body)) e->grounded = 0; // walked off a ledge
+}
+
+static uint8_t marioNearPlant(const Enemy *e) {
+    int16_t d = mario.x - e->body.x;
+    return d > -PLANT_SHY_DISTANCE && d < PLANT_SHY_DISTANCE;
+}
+
+// A Piranha Plant's cycle (moves half a pixel a frame: one per 2 frames)
+static void plantMove(Enemy *e, uint8_t frames) {
+    int16_t hideY = e->velocityY;
+    switch (e->subX) {
+    case PLANT_DOWN:
+        if (e->timer >= PLANT_WAIT_FRAMES && !marioNearPlant(e)) {
+            e->subX = PLANT_RISING;
+            e->state = PLANT;
+        }
+        break;
+    case PLANT_RISING:
+        e->body.y -= frames >> 1;
+        if (e->body.y <= hideY - PLANT_RISE) {
+            e->subX = PLANT_UP;
+            e->timer = 0;
+        }
+        break;
+    case PLANT_UP:
+        if (e->timer >= PLANT_WAIT_FRAMES) e->subX = PLANT_SINKING;
+        break;
+    default:
+        e->body.y += frames >> 1;
+        if (e->body.y >= hideY) {
+            e->body.y = hideY;
+            e->subX = PLANT_DOWN;
+            e->state = PLANT_HIDDEN;
+            e->timer = 0;
+        }
+        break;
+    }
 }
 
 // Advance an enemy by `frames` (1, or 2 for the half-rate updates below)
@@ -238,6 +340,10 @@ static void move(Enemy *e, uint8_t frames) {
     case SQUASHED:
         if (e->timer >= SQUASH_FRAMES) e->state = NONE;
         break;
+    case PLANT:
+    case PLANT_HIDDEN:
+        plantMove(e, frames);
+        break;
     case KNOCKED:
         // falls straight through everything
         do {
@@ -259,6 +365,10 @@ static void touchMario(Enemy *e) {
         // star power knocks out anything Mario touches
         knockOut(e);
         award(&starChain, e->body.x, e->body.y);
+        return;
+    }
+    if (e->state == PLANT) {
+        playerHurt(); // there's no stomping a Piranha Plant
         return;
     }
 
@@ -314,6 +424,7 @@ static void touchEachOther(Enemy *a, Enemy *b) {
         if (!bShell || aShell) knockOut(b);
         return;
     }
+    if (a->state == PLANT || b->state == PLANT) return; // nothing else bothers a plant
     if ((a->speed > 0 && a->body.x < b->body.x) || (a->speed < 0 && a->body.x > b->body.x)) a->speed = -a->speed;
     if ((b->speed > 0 && b->body.x < a->body.x) || (b->speed < 0 && b->body.x > a->body.x)) b->speed = -b->speed;
 }
@@ -451,6 +562,10 @@ void enemiesDraw(void) BANKED {
         case KNOCKED:
             if (e->kind == ENEMY_GOOMBA) spriteDraw16(TILE_GOOMBA, S_FLIPY, e->body.x, e->body.y);
             else                         spriteDraw16(TILE_SHELL, 0, e->body.x, e->body.y);
+            break;
+        case PLANT:
+            // behind its pipe, so it seems to come out of it; mouth opening and closing
+            spriteDrawTall(walkFlip ? TILE_PIRANHA2 : TILE_PIRANHA1, S_PRIORITY, e->body.x, e->body.y);
             break;
         }
     }

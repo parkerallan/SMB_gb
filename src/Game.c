@@ -12,6 +12,8 @@
 #include "Popup.h"
 #include "Fireball.h"
 #include "Pipes.h"
+#include "Lifts.h"
+#include "LevelInfo.h"
 #include "Sprites.h"
 #include "Util.h"
 #include "Sound.h"
@@ -31,7 +33,13 @@
 #define TIME_BONUS_POINTS 50
 #define TIME_BONUS_TICK 4      // the counting beeps every this many units
 #define HURRY_TIME 100         // the clock gets here: the hurry jingle, then faster music
-#define DEATH_MUSIC_MAX_FRAMES 300 // per unit of time left at the end of a level, like SMB
+#define DEATH_MUSIC_MAX_FRAMES 300
+#define LAST_LEVEL 2           // 1-1 and 1-2 so far; after 1-2 it's 1-1 again
+#define HALFWAY_X 40           // restarting at the halfway point: this far into its page, like SMB
+// The warp zone's text, a tile row over its pipes, and their numbers just above them
+#define WARP_TEXT "WELCOME TO WARP ZONE!"
+#define WARP_TEXT_ROW 11
+#define WARP_NUMBER_ROW 17 // per unit of time left at the end of a level, like SMB
 
 int8_t lives;
 uint32_t score;
@@ -42,6 +50,7 @@ static uint16_t timeLeft;
 static uint8_t timeFrames;
 static uint8_t areaSong;   // the music for where Mario is (or the star's)
 static uint8_t deathMusic; // started for this death
+static uint8_t halfway;    // got as far as the level's halfway point: dying restarts it there
 
 static void refreshHud(void) {
     hudUpdate(score, coins, lives, world, level, timeLeft);
@@ -54,6 +63,7 @@ void gameInit(void) {
     blocksInit();
     powerupInit();
     enemiesInit();
+    liftsInit();
     popupsInit();
     fireballsInit();
     flagpoleInit();
@@ -65,6 +75,16 @@ void gameNew(void) {
     coins = 0;
     world = 1;
     level = 1;
+    halfway = 0;
+}
+
+// The level's own area (not its intro or coin room), and its halfway point
+static uint8_t levelMainArea(void) {
+    return level == 2 ? AREA_1_2 : AREA_1_1;
+}
+
+static uint8_t halfwayPage(void) {
+    return level == 2 ? LEVEL1_2_HALFWAY_PAGE : LEVEL1_1_HALFWAY_PAGE;
 }
 
 // Every sprite, drawn fresh each frame (also while the game is paused)
@@ -72,6 +92,7 @@ static void drawSprites(void) {
     spritesBegin();
     playerDraw();
     enemiesDraw();
+    if (liftCount) liftsDraw();
     powerupDraw();
     fireballsDraw();
     blocksDraw();
@@ -90,12 +111,22 @@ static void resetAreaObjects(void) {
     flagpoleReset();
     pipesReset();
     hudSetLevelPalette(levelUnderground ? PALETTE_UNDERGROUND : PALETTE_OVERWORLD);
+    if (levelArea == AREA_1_2) {
+        // SMB's warp zone text, and each pipe's world above it (they lead to
+        // worlds 4, 3 and 2, which aren't here yet)
+        levelAddText(LEVEL1_2_WARP_ZONE_COLUMN * 2 - 1, WARP_TEXT_ROW, WARP_TEXT);
+        levelAddText(LEVEL1_2_WARP_PIPE1_COLUMN * 2 + 1, WARP_NUMBER_ROW, "4");
+        levelAddText(LEVEL1_2_WARP_PIPE2_COLUMN * 2 + 1, WARP_NUMBER_ROW, "3");
+        levelAddText(LEVEL1_2_WARP_PIPE3_COLUMN * 2 + 1, WARP_NUMBER_ROW, "2");
+    }
 }
 
 // The music for where Mario is: ground or underground, the star's while he
 // has one, all faster once the clock is under HURRY_TIME
 static uint8_t areaMusic(void) {
-    uint8_t song = playerHasStar() ? MUSIC_STAR : levelUnderground ? MUSIC_UNDERGROUND : MUSIC_GROUND;
+    uint8_t song;
+    if (levelArea == AREA_1_2_INTRO) return MUSIC_PIPE_INTRO; // (plays once)
+    song = playerHasStar() ? MUSIC_STAR : levelUnderground ? MUSIC_UNDERGROUND : MUSIC_GROUND;
     // each has its faster version right after it
     return timeLeft < HURRY_TIME ? song + 1 : song;
 }
@@ -105,12 +136,27 @@ static void startAreaMusic(void) {
     musicPlay(areaSong);
 }
 
-// Load the level with the screen off so it appears all at once
+// Load the level with the screen off so it appears all at once: 1-1, or 1-2's
+// intro (Mario walks from the castle into a pipe, and the level's underground)
 static void startLevel(void) {
     DISPLAY_OFF;
     playerReset();
     cameraReset();
-    levelLoad(AREA_1_1, cameraX);
+    if (halfway) {
+        // back from the halfway point, which the level starts from like SMB's:
+        // on the ground in 1-1, dropping in from above in 1-2
+        mario.x = ((int16_t)halfwayPage() << 8) + HALFWAY_X;
+        if (level == 2) mario.y = LEVEL1_2_START_FEET - mario.height;
+        levelLoad(levelMainArea(), 0); // (first: the camera stops at the level's right end)
+        cameraJumpTo(&mario);
+        cameraApply();
+    } else if (level == 2) {
+        mario.x = LEVEL1_2_INTRO_START_X;
+        mario.y = LEVEL1_2_INTRO_START_FEET - mario.height;
+        levelLoad(AREA_1_2_INTRO, cameraX);
+    } else {
+        levelLoad(AREA_1_1, cameraX);
+    }
     resetAreaObjects();
     timeFrames = 0;
     drawSprites();
@@ -199,9 +245,11 @@ uint8_t gameTimeBonus(void) {
     return 1;
 }
 
-// Only 1-1 exists so far: play it again, keeping score, lives, coins and
-// Mario's power-ups
+// On to the next level (1-2 is the last so far: then 1-1 again), keeping score,
+// lives, coins and Mario's power-ups
 static void levelComplete(void) {
+    halfway = 0;
+    if (++level > LAST_LEVEL) level = 1;
     gameEnterLevel();
 }
 
@@ -248,20 +296,24 @@ void gameUpdate(void) {
         cameraFollow(&mario);
     } else {
         input = joypad();
+        if (levelArea == AREA_1_2_INTRO) input = J_RIGHT; // he walks into the pipe by himself
         playerUpdate(input);
         if (playerFellOut()) {
             playerDie(); // takes his power-ups away, like any death
             loseLife();
             return;
         }
-        if (tickClock()) playerDie(); // out of time
+        if (levelArea != AREA_1_2_INTRO && tickClock()) playerDie(); // out of time
         flagpoleCheck(); // grabbed the flagpole?
         if (input & (J_DOWN | J_RIGHT)) pipesCheck(input); // going down (or into) a pipe?
         if (levelCoins) blocksCollectCoins();
+        // the halfway point: once the screen's scrolled to its page (like SMB)
+        if (!halfway && levelArea == levelMainArea() && (uint8_t)(cameraX >> 8) >= halfwayPage()) halfway = 1;
         if (areaMusic() != areaSong) startAreaMusic(); // the star started or wore off
 
         cameraFollow(&mario);
         enemiesUpdate();
+        if (liftCount) liftsUpdate();
         blocksUpdate();
         powerupUpdate();
         fireballsUpdate();

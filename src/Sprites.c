@@ -84,6 +84,40 @@ void spriteDrawKoopa(uint8_t first, uint8_t props, int16_t x, int16_t y) {
     *o++ = top; *o++ = right; *o++ = first;   *o = props;
 }
 
+void spriteDrawTall(uint8_t first, uint8_t props, int16_t x, int16_t y) {
+    uint16_t u = x - originX, v = y - originY;
+    uint8_t left, right, top, row;
+    uint8_t *o;
+    if (u >= VISIBLE_X || v >= VISIBLE_Y || next > MAX_HARDWARE_SPRITES - 6) return;
+    left = (uint8_t)u + (SPRITE_OFFSET_X - 15);
+    right = left + 8;
+    top = (uint8_t)v + (HUD_PIXEL_HEIGHT + SPRITE_OFFSET_Y);
+    if (props & S_FLIPX) { right = left; left += 8; }
+    o = (uint8_t *)&shadow_OAM[next];
+    next += 6;
+    for (row = 0; row < 3; row++, top += 8) {
+        *o++ = top; *o++ = left;  *o++ = first++; *o++ = props;
+        *o++ = top; *o++ = right; *o++ = first++; *o++ = props;
+    }
+}
+
+void spriteDrawRow(uint8_t tile, uint8_t count, uint8_t props, int16_t x, int16_t y) {
+    int16_t screenX = x - originX - 15;
+    uint16_t v = y - originY;
+    uint8_t sx, sy;
+    uint8_t *o;
+    if (screenX <= -(int16_t)(count << 3) || screenX >= SCREEN_WIDTH || v >= VISIBLE_Y) return;
+    if (next > MAX_HARDWARE_SPRITES - count) return;
+    // (segments off the left edge wrap to x >= 168, which the hardware hides)
+    sx = (uint8_t)screenX + SPRITE_OFFSET_X;
+    sy = (uint8_t)v + (HUD_PIXEL_HEIGHT + SPRITE_OFFSET_Y);
+    o = (uint8_t *)&shadow_OAM[next];
+    next += count;
+    for (; count; count--, sx += 8) {
+        *o++ = sy; *o++ = sx; *o++ = tile; *o++ = props;
+    }
+}
+
 void spriteDraw(uint8_t tile, uint8_t props, int16_t x, int16_t y) {
     int16_t sx = x - cameraX + SPRITE_OFFSET_X;
     int16_t sy = y - cameraY + SPRITE_OFFSET_Y;
