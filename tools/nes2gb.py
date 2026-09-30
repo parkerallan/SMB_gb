@@ -31,6 +31,7 @@ BG = 0x100   # background pattern table
 
 # NES color index -> Game Boy gray
 SPRITE_GRAYS = {0: 0, 1: 2, 2: 1, 3: 3}  # red -> dark, skin/tan -> light, brown -> black
+ONE_UP_GRAYS = {0: 0, 1: 1, 2: 2, 3: 3}   # the mushroom with its two colors' shades swapped
 TEXT_GRAYS = {0: 0, 1: 3, 2: 3, 3: 3}    # any ink -> black on the white sky
 BACKGROUND_GRAYS = {0: 0, 1: 1, 2: 2, 3: 3}  # sky -> white, then light to dark as on the NES
 
@@ -243,7 +244,10 @@ def main():
     items.add("EXPLOSION_SMALL", mirror4(0x68), SPRITE_GRAYS, "fireball hit / firework, 16x16")
     items.add("EXPLOSION_MEDIUM", mirror4(0x67), SPRITE_GRAYS)
     items.add("EXPLOSION_LARGE", mirror4(0x66), SPRITE_GRAYS)
-    items.add("FLAG", [t(0x7E), vflip(t(0x7E)), t(0x7F), vflip(t(0x7F))], SPRITE_GRAYS, "flagpole flag, 16x16")
+    # SMB's flag is 3 sprites (FlagpoleGfxHandler): the triangle at the top left, the
+    # emblem beside it at the pole, and the triangle again under the emblem
+    blank = [[0] * 8 for _ in range(8)]
+    items.add("FLAG", [t(0x7E), blank, t(0x7F), t(0x7E)], SPRITE_GRAYS, "flagpole flag, 16x16")
     items.add("VINE", [t(0xE0), t(0xE1)], SPRITE_GRAYS, "8x8 leaves, 8x8 stem")
     items.add("PLATFORM", [t(0x5B)], SPRITE_GRAYS, "8x8 lift / balance platform segment")
     items.add("SPRING1", [t(0xF2), hflip(t(0xF2)), t(0xF3), hflip(t(0xF3)), t(0xF2), hflip(t(0xF2))], SPRITE_GRAYS,
@@ -251,6 +255,8 @@ def main():
     items.add("SPRING2", [t(0xF1), hflip(t(0xF1)), t(0xF1), hflip(t(0xF1)), t(0xFC), t(0xFC)], SPRITE_GRAYS)
     items.add("SPRING3", [t(0xF0), hflip(t(0xF0)), t(0xFC), t(0xFC), t(0xFC), t(0xFC)], SPRITE_GRAYS)
     items.add("CASTLE_FLAG", [t(0x54), t(0x56), t(0x55), t(0x57)], SPRITE_GRAYS, "star flag raised over the castle, 16x16")
+    # SMB draws the 1-up mushroom with a green palette; here its shades are swapped instead
+    items.add("ONE_UP", frame16(chr_, s(0x76), s(0x77), s(0x78), s(0x79)), ONE_UP_GRAYS, "1-up mushroom, 16x16")
     items.write("assets/sprites")
 
     # ---- Enemies (EnemyGraphicsTable). 16x16 frames are TL, BL, TR, BR;

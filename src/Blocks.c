@@ -17,6 +17,9 @@
 #define MAX_COINS 2
 #define BRICK_POINTS 50
 #define COIN_POINTS 200
+// A multi-coin brick gives a coin per hit until this long after its first
+// hit; the next hit gives its last coin and uses it up
+#define MULTI_COIN_FRAMES 240
 
 // Coin physics in 1/16 pixels, like Player.c. Lower than the NES coin so it
 // stays on the Game Boy's shorter screen: rises ~14px over ~10 frames.
@@ -51,6 +54,11 @@ static struct {
 // Is anything showing? Most frames nothing is, and then update and draw
 // return straight away (looping over the empty slots cost several scanlines)
 static uint8_t busy;
+
+// The multi-coin brick being emptied, if any (block coordinates) and its time left
+static int16_t multiX;
+static uint8_t multiY;
+static uint8_t multiTimer;
 
 static uint8_t isQuestion(uint8_t block) {
     return block == SCENERY_QUESTION_COIN || block == SCENERY_QUESTION_POWERUP;
@@ -95,6 +103,8 @@ void blocksReset(void) BANKED {
     for (i = 0; i < MAX_COINS; i++) coinEffects[i].active = 0;
     for (i = 0; i < 4; i++) fragments[i].active = 0;
     busy = 0;
+    multiX = -1;
+    multiTimer = 0;
 }
 
 static void setBlockTiles(int16_t tx, uint8_t ty, const uint8_t *tiles) {
@@ -190,6 +200,34 @@ void blocksHit(int16_t tx, int16_t ty) BANKED {
             spawnCoin(bx, by);
             gameCollectCoin();
         }
+    } else if (block == SCENERY_HIDDEN_1UP || block == SCENERY_HIDDEN_COIN) {
+        // appears (see playerUpdate) and gives its 1-up or coin
+        levelSetBlock(bx >> 1, by >> 1, SCENERY_USED_BLOCK);
+        startBump(bx, by, SCENERY_USED_BLOCK);
+        if (block == SCENERY_HIDDEN_1UP) {
+            powerupSpawn(bx, by, POWERUP_ONE_UP);
+        } else {
+            spawnCoin(bx, by);
+            gameCollectCoin();
+        }
+    } else if (block == SCENERY_BRICK_LINE_COINS || block == SCENERY_BRICK_COINS) {
+        if (multiX != (bx >> 1) || multiY != (by >> 1)) {
+            // first hit starts its timer
+            multiX = bx >> 1;
+            multiY = by >> 1;
+            multiTimer = MULTI_COIN_FRAMES;
+            busy = 1;
+        }
+        spawnCoin(bx, by);
+        gameCollectCoin();
+        if (multiTimer) {
+            startBump(bx, by, block);
+        } else {
+            // time's up: that was its last coin
+            levelSetBlock(bx >> 1, by >> 1, SCENERY_USED_BLOCK);
+            startBump(bx, by, SCENERY_USED_BLOCK);
+            multiX = -1;
+        }
     } else if (isItemBrick(block)) {
         // bricks holding an item give it once, then are used blocks
         levelSetBlock(bx >> 1, by >> 1, SCENERY_USED_BLOCK);
@@ -238,7 +276,8 @@ void blocksUpdate(void) BANKED {
     uint8_t i;
     if (!busy) return;
     if (bump.active && ++bump.frame >= sizeof(bumpOffsets)) finishBump();
-    busy = bump.active;
+    if (multiTimer) multiTimer--;
+    busy = bump.active | (multiTimer != 0);
     for (i = 0; i < MAX_COINS; i++) {
         updateCoin(i);
         busy |= coinEffects[i].active;

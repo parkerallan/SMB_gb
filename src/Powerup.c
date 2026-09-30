@@ -29,11 +29,12 @@ static uint8_t subX, subY;
 static int16_t velocityY;
 static int16_t speed; // +/- ITEM_SPEED
 
-static const uint8_t itemTiles[] = {SPR_TILE_MUSHROOM, SPR_TILE_FLOWER, SPR_TILE_STAR};
+static const uint8_t itemTiles[] = {SPR_TILE_MUSHROOM, SPR_TILE_FLOWER, SPR_TILE_STAR, SPR_TILE_ONE_UP};
 
 void powerupInit(void) BANKED {
     // mushroom, flower and star are consecutive in both places
     bankedSetSpriteData(SPR_TILE_MUSHROOM, 12, ItemTiles + ITEMTILES_MUSHROOM * 16, BANK(ItemTiles));
+    bankedSetSpriteData(SPR_TILE_ONE_UP, 4, ItemTiles + ITEMTILES_ONE_UP * 16, BANK(ItemTiles));
 }
 
 void powerupReset(void) BANKED {
@@ -78,6 +79,11 @@ static void move(void) {
 
 static void collect(void) {
     state = NONE;
+    if (kind == POWERUP_ONE_UP) {
+        gameAddLife();
+        popupShow(item.x, item.y, POPUP_1UP);
+        return;
+    }
     switch (kind) {
     case POWERUP_MUSHROOM: playerGrow(); break;
     case POWERUP_FLOWER:   playerFire(); break;

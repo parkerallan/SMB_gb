@@ -76,6 +76,7 @@ static void loadColumn(int16_t column) {
 void levelLoad(uint8_t area, int16_t cameraX) {
     uint8_t i;
     uint16_t start = 0, size;
+    const uint8_t *cell, *end;
     levelArea = area;
     if (area == AREA_1_1_BONUS) {
         levelWidth = Level1_1BonusWidth;
@@ -94,9 +95,11 @@ void levelLoad(uint8_t area, int16_t cameraX) {
     levelColumns <<= 1;
     levelPixelWidth = levelColumns << 3;
     for (i = 0; i < LEVEL_BLOCK_ROWS; i++, start += levelWidth) rowStart[i] = start;
+    // count the loose coins (a pointer loop: indexing made level starts
+    // noticeably slower)
     levelCoins = 0;
-    for (start = 0; start < size; start++) {
-        if (map[start] == SCENERY_COIN) levelCoins++;
+    for (cell = map, end = map + size; cell != end; cell++) {
+        if (*cell == SCENERY_COIN) levelCoins++;
     }
 
     bankedSetBkgData(0, SceneryTilesCount, SceneryTiles, BANK(SceneryTiles));

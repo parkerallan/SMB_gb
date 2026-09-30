@@ -6,10 +6,12 @@
 
 // The item from a power-up block: it rises out of the block, then the mushroom
 // slides along, the flower stays put and the star hops along. Touching it
-// makes small Mario big, big Mario fire Mario, or Mario invincible.
+// makes small Mario big, big Mario fire Mario, or Mario invincible; the 1-up
+// mushroom slides along like the mushroom and gives an extra life.
 #define POWERUP_MUSHROOM 0
 #define POWERUP_FLOWER   1
 #define POWERUP_STAR     2
+#define POWERUP_ONE_UP   3
 
 // Load its sprite tiles
 void powerupInit(void) BANKED;

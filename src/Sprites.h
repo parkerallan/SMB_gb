@@ -20,13 +20,15 @@
 #define SPR_TILE_MUSHROOM    (SPR_TILE_FLAG + 4)                         // 4: TL BL TR BR
 #define SPR_TILE_FLOWER      (SPR_TILE_MUSHROOM + 4)                     // 4: TL BL TR BR
 #define SPR_TILE_STAR        (SPR_TILE_FLOWER + 4)                       // 4: TL BL TR BR
-#define SPR_TILE_BRICK_PIECE (SPR_TILE_STAR + 4)                         // 1
-#define SPR_TILE_FIREBALL    (SPR_TILE_BRICK_PIECE + 1)                  // 1
-#define SPR_TILE_BIG_FIRE    (SPR_TILE_FIREBALL + 1)                     // 8: fire Mario throwing (Mario climbing at the flagpole)
+#define SPR_TILE_BIG_FIRE    (SPR_TILE_STAR + 4)                         // 8: fire Mario throwing (Mario climbing at the flagpole)
+#define SPR_TILE_SMALL_SKID  (SPR_TILE_BIG_FIRE + 8)                     // 4: small Mario skidding, TL BL TR BR
 #define SPR_TILE_SCORE       ((uint8_t)156)                             // 9: see Popup.c
 #define SPR_TILE_ENEMIES     ((uint8_t)(SPR_TILE_SCORE + 9))             // 28: see Enemies.c
 #define SPR_TILE_EXPLOSION   ((uint8_t)(SPR_TILE_ENEMIES + 28))          // 12: small, medium, large (see Fireball.c)
 #define SPR_TILE_CASTLE_FLAG ((uint8_t)(SPR_TILE_EXPLOSION + 12))        // 4: TL BL TR BR
+#define SPR_TILE_ONE_UP      ((uint8_t)(SPR_TILE_CASTLE_FLAG + 4))       // 4: 1-up mushroom, TL BL TR BR
+#define SPR_TILE_BRICK_PIECE ((uint8_t)(SPR_TILE_ONE_UP + 4))            // 1
+#define SPR_TILE_FIREBALL    ((uint8_t)(SPR_TILE_BRICK_PIECE + 1))       // 1
 
 // Hardware sprite coordinates are offset from the screen by (8, 16)
 #define SPRITE_OFFSET_X 8
