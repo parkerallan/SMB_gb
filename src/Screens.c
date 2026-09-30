@@ -3,6 +3,7 @@
 #include "Screens.h"
 #include "Font.h"
 #include "Metasprites.h"
+#include "Sound.h"
 #include "TitleMap.h"
 #include "SceneryTiles.h"
 #include "MiscBackgroundTiles.h"
@@ -74,5 +75,7 @@ void gameOverScreen(void) {
     fontPrint(5, 8, "GAME OVER");
     DISPLAY_ON;
 
+    musicPlay(MUSIC_GAME_OVER);
     waitFrames(GAME_OVER_FRAMES);
+    while (musicPlaying()) wait_vbl_done();
 }

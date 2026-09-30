@@ -13,6 +13,7 @@
 #include "Level1_1Enemies.h"
 #include "EnemyTiles.h"
 #include "Sprites.h"
+#include "Sound.h"
 
 #define MAX_ENEMIES 6
 #define SCREEN_WIDTH 160
@@ -170,6 +171,7 @@ static void award(uint8_t *chain, int16_t x, int16_t y) {
 }
 
 static void knockOut(Enemy *e) {
+    sfxPlay(SFX_KICK);
     e->state = KNOCKED;
     e->velocityY = KNOCK_JUMP;
     e->subY = 0;
@@ -271,6 +273,7 @@ static void touchMario(Enemy *e) {
             }
             e->timer = 0;
             playerBounce();
+            sfxPlay(SFX_STOMP);
             award(&stompChain, e->body.x, e->body.y);
         } else {
             playerHurt();
@@ -279,6 +282,7 @@ static void touchMario(Enemy *e) {
     case SHELL:
         // kick it away from Mario
         e->state = SHELL_MOVING;
+        sfxPlay(SFX_KICK);
         e->speed = (mario.x + 8 < e->body.x + 8) ? SHELL_SPEED : -SHELL_SPEED;
         e->kickGrace = KICK_GRACE_FRAMES;
         e->shellChain = SHELL_CHAIN_START;
@@ -291,6 +295,7 @@ static void touchMario(Enemy *e) {
             e->speed = 0;
             e->timer = 0;
             playerBounce();
+            sfxPlay(SFX_STOMP);
             award(&stompChain, e->body.x, e->body.y);
         } else {
             playerHurt();

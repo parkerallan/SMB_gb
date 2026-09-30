@@ -10,6 +10,7 @@
 #include "Popup.h"
 #include "ItemTiles.h"
 #include "Sprites.h"
+#include "Sound.h"
 
 #define SLIDE_SPEED 2            // pixels per frame, Mario and the flag
 #define TURN_FRAMES 30           // Mario hangs on the far side of the pole
@@ -107,6 +108,8 @@ void flagpoleCheck(void) BANKED {
     mario.x = poleX - POLE_GRAB_X;
     playerFaceLeft(0);
     playerSetPose(POSE_POLE);
+    musicStop();
+    sfxPlay(SFX_FLAGPOLE);
     state = SLIDING;
 }
 
@@ -138,6 +141,7 @@ uint8_t flagpoleUpdate(void) BANKED {
         if (++timer >= TURN_FRAMES) {
             playerFaceLeft(0);
             playerSetPose(POSE_NORMAL);
+            musicPlay(MUSIC_LEVEL_CLEAR);
             state = WALKING;
         }
         break;
@@ -173,7 +177,10 @@ uint8_t flagpoleUpdate(void) BANKED {
         if (!fireworksLeft) {
             if (++timer >= FINISH_FRAMES) state = FINISHED;
         } else {
-            if (timer == 0) gameAddScore(FIREWORK_POINTS);
+            if (timer == 0) {
+                gameAddScore(FIREWORK_POINTS);
+                sfxPlay(SFX_FIREWORK);
+            }
             if (++timer >= FIREWORK_FRAMES + FIREWORK_GAP) {
                 fireworksLeft--;
                 timer = 0;
@@ -181,7 +188,7 @@ uint8_t flagpoleUpdate(void) BANKED {
         }
         break;
     case FINISHED:
-        return 1;
+        return !musicPlaying(); // once the fanfare's over, like SMB
     }
     return 0;
 }

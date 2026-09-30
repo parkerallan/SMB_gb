@@ -12,6 +12,7 @@
 #include "Popup.h"
 #include "ItemTiles.h"
 #include "Sprites.h"
+#include "Sound.h"
 
 #define ITEM_SPEED 16           // mushroom and star: 1 pixel per frame (1/16 pixel units)
 #define STAR_BOUNCE -64         // the star hops along
@@ -48,6 +49,7 @@ void powerupSpawn(int16_t tx, int16_t ty, uint8_t what) BANKED {
     item.height = 16;
     kind = what;
     state = EMERGING;
+    sfxPlay(SFX_POWERUP_APPEAR);
     timer = 0;
     subX = subY = 0;
     velocityY = 0;
@@ -85,9 +87,9 @@ static void collect(void) {
         return;
     }
     switch (kind) {
-    case POWERUP_MUSHROOM: playerGrow(); break;
-    case POWERUP_FLOWER:   playerFire(); break;
-    default:               playerStar(); break;
+    case POWERUP_MUSHROOM: playerGrow(); sfxPlay(SFX_POWERUP); break;
+    case POWERUP_FLOWER:   playerFire(); sfxPlay(SFX_POWERUP); break;
+    default:               playerStar(); break; // the star's music is enough
     }
     gameAddScore(ITEM_POINTS);
     popupShow(item.x, item.y, ITEM_POINTS);

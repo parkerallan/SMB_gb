@@ -11,6 +11,7 @@
 #include "BigMarioTiles.h"
 #include "Metasprites.h"
 #include "Sprites.h"
+#include "Sound.h"
 
 // Mario moves like SMB, with its numbers. Speeds are in 1/256 pixels per
 // frame (SMB's units: its 1/16-pixel speeds times 16).
@@ -240,6 +241,7 @@ void playerHurt(void) {
     mario.height = SMALL_HEIGHT;
     sizeTimer = CHANGE_SIZE_FRAMES;
     invincibleTimer = INVINCIBLE_FRAMES;
+    sfxPlay(SFX_PIPE); // SMB's shrinking sound is its pipe sound
 }
 
 uint8_t playerIsInvincible(void) {
@@ -431,6 +433,7 @@ void playerUpdate(uint8_t input) {
         fireballThrow(facingLeft ? mario.x + (16 - FIREBALL_HAND_X - 8) : mario.x + FIREBALL_HAND_X,
                       mario.y + FIREBALL_HAND_Y, facingLeft)) {
         throwTimer = THROW_FRAMES;
+        sfxPlay(SFX_FIREBALL);
     }
 
     // Running: B held on the ground (and a moment after letting go)
@@ -444,6 +447,7 @@ void playerUpdate(uint8_t input) {
     if ((input & J_A) && !(lastInput & J_A) && onGround) {
         gravityIndex = jumpIndex();
         velocityY = jumpSpeedAt[gravityIndex];
+        sfxPlay(big ? SFX_JUMP_BIG : SFX_JUMP);
         subY = 0;
         jumping = 1;
         airMax = runTimer != 0 || (speedX > WALK_MAX || speedX < -WALK_MAX);

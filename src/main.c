@@ -2,6 +2,7 @@
 #include "Game.h"
 #include "Screens.h"
 #include "Camera.h"
+#include "Sound.h"
 
 void main(void) {
     DISPLAY_ON;
@@ -9,6 +10,9 @@ void main(void) {
 
     titleScreen();
     gameInit();
+    // after gameInit: the HUD's vblank handler (it switches the window on) has
+    // to run before the sound player's, or the HUD comes on late and flickers
+    soundInit();
     gameNew();
     gameEnterLevel();
 

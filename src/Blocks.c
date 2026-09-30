@@ -13,6 +13,7 @@
 #include "Physics.h"
 #include "ItemTiles.h"
 #include "Sprites.h"
+#include "Sound.h"
 
 #define MAX_COINS 2
 #define BRICK_POINTS 50
@@ -127,6 +128,7 @@ static void startBump(int16_t tx, uint8_t ty, uint8_t becomes) {
     uint8_t i;
 
     finishBump();
+    sfxPlay(SFX_BUMP);
     if (becomes == SCENERY_USED_BLOCK) bump.sprite = SPR_TILE_USED;
     else if (isLineBrick(becomes))     bump.sprite = SPR_TILE_BRICK_LINE;
     else                               bump.sprite = SPR_TILE_BRICK;
@@ -158,6 +160,7 @@ static void spawnCoin(int16_t tx, uint8_t ty) {
 // Big Mario smashes a plain brick: it's gone, and 4 pieces fly out
 static void breakBrick(int16_t tx, uint8_t ty) {
     uint8_t i;
+    sfxPlay(SFX_BRICK);
     levelSetBlock(tx >> 1, ty >> 1, SCENERY_BLANK);
     for (i = 0; i < 4; i++) {
         fragments[i].active = 1;
@@ -243,6 +246,7 @@ void blocksHit(int16_t tx, int16_t ty) BANKED {
     } else if (isBrick(block)) {
         startBump(bx, by, block); // bricks holding items don't break
     } else {
+        sfxPlay(SFX_BUMP); // anything else solid just thuds
         return;
     }
     enemiesBumpBlock(bx >> 1, by >> 1); // knock out anything standing on it

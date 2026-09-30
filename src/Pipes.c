@@ -6,6 +6,7 @@
 #include "Level.h"
 #include "Player.h"
 #include "Game.h"
+#include "Sound.h"
 
 #define SINK_FRAMES 32        // down into a pipe: a pixel a frame until even big Mario is in
 #define WALK_IN_FRAMES 20     // into the sideways pipe
@@ -35,6 +36,8 @@ static void start(uint8_t how) {
     state = how;
     timer = 0;
     playerSetPose(POSE_PIPE);
+    musicStop();
+    sfxPlay(SFX_PIPE);
 }
 
 void pipesCheck(uint8_t input) BANKED {

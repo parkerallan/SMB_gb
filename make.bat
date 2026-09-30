@@ -6,13 +6,14 @@ set EMULATOR=D:\Emulation\GBA\mGBA\mGBA.exe
 cd /d "%~dp0"
 if not exist build mkdir build
 
-rem Every .c file in src and assets is part of the ROM. MBC1 cartridge, 4 x 16KB banks:
-rem core code in bank 0, maps in bank 1, tiles in bank 2, level-object code in bank 3
+rem Every .c file in src and assets is part of the ROM. MBC1 cartridge, 8 x 16KB banks:
+rem core code in bank 0, maps in bank 1, tiles in bank 2, level-object code in bank 3,
+rem music and the sound player in bank 4 (5-7 are free)
 set SRC=
-for %%f in (src\*.c assets\sprites\*.c assets\tiles\*.c assets\maps\*.c) do set SRC=!SRC! %%f
+for %%f in (src\*.c assets\sprites\*.c assets\tiles\*.c assets\maps\*.c assets\sound\*.c) do set SRC=!SRC! %%f
 
-"%GBDK%\bin\lcc" -Wa-l -Wl-m -Wl-j -DUSE_SFR_FOR_REG -Wl-yt1 -Wl-yo4 ^
-  -Isrc -Iassets\sprites -Iassets\tiles -Iassets\maps ^
+"%GBDK%\bin\lcc" -Wa-l -Wl-m -Wl-j -DUSE_SFR_FOR_REG -Wl-yt1 -Wl-yo8 ^
+  -Isrc -Iassets\sprites -Iassets\tiles -Iassets\maps -Iassets\sound ^
   -o build\main.gb %SRC%
 if errorlevel 1 exit /b 1
 

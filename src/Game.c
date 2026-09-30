@@ -14,6 +14,7 @@
 #include "Pipes.h"
 #include "Sprites.h"
 #include "Util.h"
+#include "Sound.h"
 
 #define START_LIVES 4
 // Clock starts at 400 and ticks down once per real second (60 frames).
@@ -27,7 +28,10 @@
 // outlines blend into it, like SMB's)
 #define PALETTE_OVERWORLD   DMG_PALETTE(DMG_WHITE, DMG_LITE_GRAY, DMG_DARK_GRAY, DMG_BLACK)
 #define PALETTE_UNDERGROUND DMG_PALETTE(DMG_BLACK, DMG_LITE_GRAY, DMG_DARK_GRAY, DMG_BLACK)
-#define TIME_BONUS_POINTS 50 // per unit of time left at the end of a level, like SMB
+#define TIME_BONUS_POINTS 50
+#define TIME_BONUS_TICK 4      // the counting beeps every this many units
+#define HURRY_TIME 100         // the clock gets here: the hurry jingle, then faster music
+#define DEATH_MUSIC_MAX_FRAMES 300 // per unit of time left at the end of a level, like SMB
 
 int8_t lives;
 uint32_t score;
@@ -36,6 +40,8 @@ int8_t world, level;
 
 static uint16_t timeLeft;
 static uint8_t timeFrames;
+static uint8_t areaSong;   // the music for where Mario is (or the star's)
+static uint8_t deathMusic; // started for this death
 
 static void refreshHud(void) {
     hudUpdate(score, coins, lives, world, level, timeLeft);
@@ -86,6 +92,19 @@ static void resetAreaObjects(void) {
     hudSetLevelPalette(levelUnderground ? PALETTE_UNDERGROUND : PALETTE_OVERWORLD);
 }
 
+// The music for where Mario is: ground or underground, the star's while he
+// has one, all faster once the clock is under HURRY_TIME
+static uint8_t areaMusic(void) {
+    uint8_t song = playerHasStar() ? MUSIC_STAR : levelUnderground ? MUSIC_UNDERGROUND : MUSIC_GROUND;
+    // each has its faster version right after it
+    return timeLeft < HURRY_TIME ? song + 1 : song;
+}
+
+static void startAreaMusic(void) {
+    areaSong = areaMusic();
+    musicPlay(areaSong);
+}
+
 // Load the level with the screen off so it appears all at once
 static void startLevel(void) {
     DISPLAY_OFF;
@@ -97,6 +116,8 @@ static void startLevel(void) {
     drawSprites();
     SHOW_SPRITES;
     DISPLAY_ON;
+    deathMusic = 0;
+    startAreaMusic();
 }
 
 void gameChangeArea(uint8_t area, int16_t x, int16_t y) {
@@ -109,6 +130,7 @@ void gameChangeArea(uint8_t area, int16_t x, int16_t y) {
     resetAreaObjects();
     drawSprites();
     DISPLAY_ON;
+    startAreaMusic();
 }
 
 void gameEnterLevel(void) {
@@ -125,11 +147,13 @@ void gameAddScore(uint16_t points) {
 }
 
 void gameAddLife(void) {
+    sfxPlay(SFX_ONE_UP);
     lives++;
     refreshHud();
 }
 
 void gameCollectCoin(void) {
+    sfxPlay(SFX_COIN);
     score += COIN_POINTS;
     if (++coins >= COINS_PER_LIFE) {
         coins = 0;
@@ -139,8 +163,18 @@ void gameCollectCoin(void) {
     }
 }
 
+static void startDeathMusic(void) {
+    if (deathMusic) return;
+    deathMusic = 1;
+    musicPlay(MUSIC_DEATH);
+}
+
 static void loseLife(void) {
+    uint16_t wait;
+    startDeathMusic(); // (falling in a pit goes straight here)
     waitFrames(DEATH_PAUSE_FRAMES);
+    // like SMB, carry on once the death music has finished
+    for (wait = 0; musicPlaying() && wait < DEATH_MUSIC_MAX_FRAMES; wait++) wait_vbl_done();
     hudSetLevelPalette(PALETTE_OVERWORLD); // for the screens that follow
     lives--;
     if (lives <= 0) {
@@ -159,6 +193,7 @@ uint8_t gameTimeBonus(void) {
     if (!timeLeft) return 0;
     timeLeft--;
     score += TIME_BONUS_POINTS;
+    if (!(timeLeft % TIME_BONUS_TICK)) sfxPlay(SFX_TICK);
     hudUpdateTime(timeLeft);
     hudUpdateScore(score, coins);
     return 1;
@@ -176,6 +211,12 @@ static uint8_t tickClock(void) {
         timeFrames = 0;
         timeLeft--;
         hudUpdateTime(timeLeft);
+        if (timeLeft == HURRY_TIME - 1) {
+            // hurry up! then the music carries on faster
+            musicPlay(MUSIC_HURRY);
+            areaSong = areaMusic();
+            musicQueue(areaSong);
+        }
     }
     return timeLeft == 0;
 }
@@ -185,6 +226,7 @@ void gameUpdate(void) {
     if (playerIsDying() || playerIsChangingSize()) {
         // Everything else stops while Mario changes size or dies, like SMB
         playerUpdate(0);
+        if (playerIsDying()) startDeathMusic();
         if (playerDeathFinished()) {
             loseLife();
             return;
@@ -216,6 +258,7 @@ void gameUpdate(void) {
         flagpoleCheck(); // grabbed the flagpole?
         if (input & (J_DOWN | J_RIGHT)) pipesCheck(input); // going down (or into) a pipe?
         if (levelCoins) blocksCollectCoins();
+        if (areaMusic() != areaSong) startAreaMusic(); // the star started or wore off
 
         cameraFollow(&mario);
         enemiesUpdate();

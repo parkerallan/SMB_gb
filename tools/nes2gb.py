@@ -361,6 +361,7 @@ def main():
 
     write_enemy_list(chr_.prg)
     write_bonus_room(chr_.prg)
+    write_music(chr_.prg)
 
     render_references()
 
@@ -637,6 +638,195 @@ def write_bonus_room(prg):
     open(out + ".c", "w", newline="\n").write("\n".join(c))
     print("wrote assets/maps/Level1_1Bonus.c/.h (%dx%d; 1-1 pipe at block %d, back out at block %d)"
           % (width, len(rows), entry[0], back[0]))
+
+# ---- Music. SMB's music engine plays "headers": each points at data for its two
+# squares, triangle and noise. Square 2 leads: [length byte (bit 7 set)] note,
+# 0 ends the part. Square 1 and noise pack length and note in one byte, the
+# triangle works like square 2. Notes index FreqRegLookupTbl; lengths index
+# MusicLengthLookupTbl from the header's offset (+8 for the faster "hurry" tempo).
+# The songs are simulated frame by frame and written out as per-channel
+# (frames, note) lists for the Game Boy: SMB's squares -> pulse 1 and 2, triangle
+# -> wave, noise -> noise.
+SOUND_BANK = 4
+MUSIC_HEADERS = 0xF90D       # MusicHeaderData (song offsets first, then headers)
+FREQ_TABLE = 0xFF00          # FreqRegLookupTbl
+LENGTH_TABLE = 0xFF66        # MusicLengthLookupTbl
+NES_CPU_HZ = 1789773
+HURRY_LENGTHS = 8
+# Song numbers in MusicHeaderData's list
+EVENT_DEATH, EVENT_GAME_OVER, EVENT_END_OF_LEVEL, EVENT_HURRY = 0, 1, 5, 6
+AREA_UNDERGROUND, AREA_STAR = 10, 12
+GROUND_LAYOUT, GROUND_LAYOUT_END, GROUND_LOOP = 16, 49, 17   # the ground theme's parts, and where it loops back to
+TRIANGLE_SHORT = 8           # frames a triangle note sounds for SMB's linear counter $1F
+TRIANGLE_LONG_FROM = 0x12    # event music holds notes this long or longer ($FF)
+# Game Boy pulse envelope per song (NRx2: start volume, fade speed): SMB's area
+# music is plucky, its event music (fanfares) held
+VOICE_AREA, VOICE_UNDERGROUND, VOICE_EVENT = 0xB2, 0xB1, 0xA5
+
+
+def music_part(prg, offset, fast, event):
+    """{channel: [(frames, note)]} for one part; note 0 is a rest (noise: drum kind 1-3)"""
+    rd = lambda a: prg[a - 0x8000]
+    h = [rd(MUSIC_HEADERS + offset + k) for k in range(6)]
+    lenofs, data, tri, sq1, noise = h[0] + fast, h[1] | (h[2] << 8), h[3], h[4], h[5] if not event else 0
+    length = lambda i: rd(LENGTH_TABLE + (i & 7) + lenofs)
+    alt = lambda v: ((v & 1) << 2) | ((v >> 7) << 1) | ((v >> 6) & 1)
+    note = lambda v: 0 if rd(FREQ_TABLE + v) == 0 and rd(FREQ_TABLE + v + 1) == 0 else v >> 1
+    out = {}
+    lead, i, n = [], 0, 0
+    while rd(data + i):
+        v = rd(data + i); i += 1
+        if v & 0x80:
+            n = length(v); v = rd(data + i); i += 1
+        lead.append((n, note(v)))
+    out['pulse2'] = lead
+    total = sum(n for n, _ in lead)
+
+    def fit(events):   # exactly `total` frames: cut the overhang, pad with a rest
+        fitted, t = [], 0
+        for n, v in events:
+            n = min(n, total - t)
+            if n > 0:
+                fitted.append((n, v)); t += n
+        if t < total:
+            fitted.append((total - t, 0))
+        return fitted
+
+    if sq1:
+        ev, i, t = [], sq1, 0
+        while t < total:
+            v = rd(data + i); i += 1
+            if v == 0:
+                continue          # death music's sweep switch
+            n = length(alt(v)); ev.append((n, note(v & 0x3E))); t += n
+        out['pulse1'] = fit(ev)
+    if tri:
+        ev, i, t, n = [], tri, 0, 0
+        while t < total:
+            v = rd(data + i); i += 1
+            if v == 0:
+                break             # silent for the rest of the part
+            if v & 0x80:
+                n = length(v); v = rd(data + i); i += 1
+                if v == 0:
+                    break
+            sound = n if (event and n >= TRIANGLE_LONG_FROM) else min(n, TRIANGLE_SHORT)
+            ev.append((sound, note(v)))
+            if n > sound:
+                ev.append((n - sound, 0))
+            t += n
+        out['wave'] = fit(ev)
+    if noise:
+        ev, i, t = [], noise, 0
+        while t < total:
+            v = rd(data + i); i += 1
+            if v == 0:
+                i = noise; continue   # the beat loops for as long as the part lasts
+            k = v & 0x3E
+            ev.append((length(alt(v)), 3 if k == 0x30 else 2 if k == 0x20 else 1 if k & 0x10 else 0))
+            t += ev[-1][0]
+        out['noise'] = fit(ev)
+    return out
+
+
+def write_music(prg):
+    """Music (bank 4): SMB's songs for the Game Boy's sound channels"""
+    rd = lambda a: prg[a - 0x8000]
+    offsets = [rd(MUSIC_HEADERS + i) for i in range(GROUND_LAYOUT_END)]
+    ground = list(range(GROUND_LAYOUT, GROUND_LAYOUT_END))
+    songs = [  # name, song numbers of its parts, part it loops back to (None: plays once), event music, voice
+        ("GROUND", ground, GROUND_LOOP - GROUND_LAYOUT, 0, False, VOICE_AREA),
+        ("GROUND_FAST", ground, GROUND_LOOP - GROUND_LAYOUT, HURRY_LENGTHS, False, VOICE_AREA),
+        ("UNDERGROUND", [AREA_UNDERGROUND], 0, 0, False, VOICE_UNDERGROUND),
+        ("UNDERGROUND_FAST", [AREA_UNDERGROUND], 0, HURRY_LENGTHS, False, VOICE_UNDERGROUND),
+        ("STAR", [AREA_STAR], 0, 0, False, VOICE_AREA),
+        ("STAR_FAST", [AREA_STAR], 0, HURRY_LENGTHS, False, VOICE_AREA),
+        ("HURRY", [EVENT_HURRY], None, 0, True, VOICE_EVENT),
+        ("DEATH", [EVENT_DEATH], None, 0, True, VOICE_EVENT),
+        ("GAME_OVER", [EVENT_GAME_OVER], None, 0, True, VOICE_EVENT),
+        ("LEVEL_CLEAR", [EVENT_END_OF_LEVEL], None, 0, True, VOICE_EVENT),
+    ]
+    channels = ['pulse1', 'pulse2', 'wave', 'noise']
+    parts, part_index, streams = [], {}, {}
+
+    def stream(events):
+        data = []
+        for n, v in events:
+            while n > 255:
+                data += [255, v]; n -= 255
+            data += [n, v]
+        key = tuple(data + [0])
+        if key not in streams:
+            streams[key] = "musicStream%d" % len(streams)
+        return streams[key]
+
+    song_parts = []
+    for name, numbers, loop, fast, event, voice in songs:
+        idx = []
+        for number in numbers:
+            key = (offsets[number], fast, event)
+            if key not in part_index:
+                decoded = music_part(prg, offsets[number], fast, event)
+                part_index[key] = len(parts)
+                parts.append([stream(decoded[c]) if c in decoded else None for c in channels])
+            idx.append(part_index[key])
+        song_parts.append(idx)
+
+    # Game Boy frequencies (pulse, and wave with a 32-step wave: the same register
+    # value for the same NES timer, as the triangle is also an octave lower)
+    freqs = []
+    for v in range(0, 0x80, 2):
+        hi, lo = rd(FREQ_TABLE + v), rd(FREQ_TABLE + v + 1)
+        t = (hi << 8) | lo
+        freqs.append(0 if t == 0 else max(0, round(2048 - 131072 * 16 * (t + 1) / NES_CPU_HZ)))
+
+    h = ["/*", " MUSIC.H", "",
+         " Super Mario Bros.' music for the Game Boy, read from its own music data. A song",
+         " is a list of parts; a part has a stream per channel (pulse 1, pulse 2, wave,",
+         " noise; NULL = unused) of (frames, note) byte pairs ending with 0. Notes index",
+         " MusicFreqs (0 = rest); the noise channel's are drum kinds 1-3.", "",
+         " Generated by tools/nes2gb.py from the Super Mario Bros. (NES) ROM.",
+         " Do not edit; change the script and rerun it.", "*/",
+         "#ifndef __Music_h_INCLUDE", "#define __Music_h_INCLUDE", "",
+         "#include <gbdk/platform.h>", "#include <stdint.h>", ""]
+    for n, song in enumerate(songs):
+        h.append("#define MUSIC_%-18s %d" % (song[0], n))
+    h += ["#define MusicSongCount %d" % len(songs), "",
+          "#define MUSIC_CHANNELS 4",
+          "typedef struct { const uint8_t *channel[MUSIC_CHANNELS]; } MusicPart;",
+          "// loop: index of the part it loops back to, MUSIC_NO_LOOP if it plays once",
+          "#define MUSIC_NO_LOOP 0xFF",
+          "typedef struct { const uint8_t *parts; uint8_t count, loop, voice; } MusicSong;", "",
+          "// In ROM bank %d (sound): switch to BANK(Music) before reading them" % SOUND_BANK,
+          "BANKREF_EXTERN(Music)",
+          "extern const MusicSong MusicSongs[];", "extern const MusicPart MusicParts[];",
+          "extern const uint16_t MusicFreqs[];", "", "#endif", ""]
+    c = ["/*", " MUSIC.C", "", " See Music.h.", "",
+         " Generated by tools/nes2gb.py from the Super Mario Bros. (NES) ROM.",
+         " Do not edit; change the script and rerun it.", "*/", "",
+         "#pragma bank %d" % SOUND_BANK, "", "#include <gbdk/platform.h>", "#include \"Music.h\"", "",
+         "BANKREF(Music)", ""]
+    for key, name in streams.items():
+        c.append("static const uint8_t %s[] = {%s};" % (name, ",".join(str(v) for v in key)))
+    c += ["", "const MusicPart MusicParts[] = {"]
+    for p in parts:
+        c.append("  {{%s}}," % ", ".join(s if s else "NULL" for s in p))
+    c += ["};", ""]
+    for n, idx in enumerate(song_parts):
+        c.append("static const uint8_t songParts%d[] = {%s};" % (n, ",".join(str(i) for i in idx)))
+    c += ["", "const MusicSong MusicSongs[] = {"]
+    for n, (name, numbers, loop, fast, event, voice) in enumerate(songs):
+        c.append("  {songParts%d, %d, %s, 0x%02X}, // %s" % (n, len(song_parts[n]),
+                 "MUSIC_NO_LOOP" if loop is None else loop, voice, name))
+    c += ["};", "", "const uint16_t MusicFreqs[] = {"]
+    c.append("  " + ",".join(str(f) for f in freqs))
+    c += ["};", ""]
+    folder = os.path.join(ROOT, "assets", "sound")
+    os.makedirs(folder, exist_ok=True)
+    open(os.path.join(folder, "Music.h"), "w", newline="\n").write("\n".join(h))
+    open(os.path.join(folder, "Music.c"), "w", newline="\n").write("\n".join(c))
+    size = sum(len(k) for k in streams) + len(parts) * 8 + sum(len(i) for i in song_parts) + len(songs) * 5 + len(freqs) * 2
+    print("wrote assets/sound/Music.c/.h (%d songs, %d parts, about %d bytes)" % (len(songs), len(parts), size))
 
 # SMB's metatile tables (MetatileGraphics_Low/High) in PRG: 4 palette groups,
 # 4 tile numbers per metatile in TL, BL, TR, BR order. Names follow the disassembly.
